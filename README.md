@@ -15,3 +15,4 @@
 - 슬롯 매칭은 SO템플릿의 기존 이름 기준
 
 CDN & Cloud is by Solbox..
+
