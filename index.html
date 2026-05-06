@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.1.0</title>
+<title>근태 집계 변환기 v1.1.1</title>
 <meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 자동 채움. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
@@ -82,7 +82,7 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn">v1.1.0</span>
+      <span class="ver" id="verBtn">v1.1.1</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
@@ -151,7 +151,7 @@
   <div class="card" id="s-history">
     <h2>📜 업데이트 이력</h2>
     <div style="font-size:12px;color:var(--muted);line-height:1.8">
-      <b>v1.1.0</b> (2026-05-06) — SO템플릿 다중 입력(부서별), ZIP 묶음 다운로드, 바로가기 메뉴, PWA 설치 지원, 아이콘 추가, <code>list is not defined</code> 버그 수정.<br>
+      <b>v1.1.1</b> (2026-05-06) — SO템플릿 다중 입력(부서별), ZIP 묶음 다운로드, 바로가기 메뉴, PWA 설치 지원, 아이콘 추가, <code>list is not defined</code> 버그 수정.<br>
       <b>v1.0.1</b> (2026-05-06) — 일자 셀 UTC 처리.<br>
       <b>v1.0.0</b> (2026-05-06) — 최초 버전.
     </div>
@@ -231,7 +231,8 @@ function readTime(v){
     const total = Math.round(v*86400);
     return {h:Math.floor(total/3600)%24, m:Math.floor(total%3600/60), s:total%60};
   }
-  if(v instanceof Date) return {h:v.getHours(), m:v.getMinutes(), s:v.getSeconds()};
+  // ExcelJS returns time cells as UTC-anchored Date (epoch 1899-12-30) — must use UTC getters
+  if(v instanceof Date) return {h:v.getUTCHours(), m:v.getUTCMinutes(), s:v.getUTCSeconds()};
   if(typeof v === 'string'){
     const m = v.match(/(\d{1,2}):(\d{2}):(\d{2})/);
     if(m) return {h:+m[1], m:+m[2], s:+m[3]};
@@ -240,7 +241,8 @@ function readTime(v){
 }
 function readDate(v){
   if(!v) return null;
-  if(v instanceof Date) return v;
+  // ExcelJS returns date cells as UTC-anchored Date — use UTC parts to avoid tz shift
+  if(v instanceof Date) return new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate());
   if(typeof v === 'number'){ return new Date((v - 25569) * 86400 * 1000); }
   if(typeof v === 'string'){
     const m = v.match(/(\d{4})-(\d{2})-(\d{2})/);
@@ -302,6 +304,9 @@ async function processTemplate(tmplFile, events, year, month, namelist){
   }
 
   ws.getCell(1,1).value = year + '년 ' + pad(month) + '월';
+  // 대상 월 시트가 숨겨져 있으면 보이게 (원본 템플릿이 04~12월을 hidden 처리)
+  if(ws.state && ws.state !== 'visible') ws.state = 'visible';
+  // 다른 시트 visibility는 그대로 유지
 
   // Find slots
   const slotCols = [1, 8, 15];
