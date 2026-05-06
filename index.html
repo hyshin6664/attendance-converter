@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>근태 집계 변환기 v1.1.0</title>
+<meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 자동 채움. 브라우저 내 처리, 외부 전송 없음.">
+<meta name="theme-color" content="#6366f1">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+  :root{
+    --bg:#fafaf7; --card:#fff; --line:#e5e5e0; --text:#1f1f1f; --muted:#6b7280;
+    --accent:#6366f1; --accent2:#818cf8; --ok:#15803d; --warn:#b45309; --err:#b91c1c;
+    --soft:#eef2ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .topbar-inner{max-width:880px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:12px}
+  .topbar .logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
+  .topbar .logo svg{width:28px;height:28px}
+  .topbar .ver{font-size:11px;color:var(--muted);font-weight:500;padding:2px 8px;background:var(--soft);border-radius:10px;color:#4338ca}
+  .nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+  .nav a{font-size:12px;color:var(--muted);padding:6px 10px;border-radius:6px;text-decoration:none;cursor:pointer}
+  .nav a:hover{background:var(--soft);color:#4338ca}
+  .install-btn{font-size:12px;padding:6px 12px;background:var(--accent);color:#fff;border:0;border-radius:6px;cursor:pointer;display:none}
+  .install-btn:hover{background:#4f46e5}
+  .install-btn.show{display:inline-block}
+
+  .wrap{max-width:880px;margin:0 auto;padding:24px 20px 80px}
+  h1{font-size:22px;margin:0 0 4px}
+  .lead{color:var(--muted);margin:0 0 22px;font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:14px;scroll-margin-top:80px}
+  .card h2{font-size:14px;margin:0 0 12px;color:#374151;display:flex;align-items:center;gap:6px}
+  .files{display:grid;gap:10px}
+  .file-row{display:grid;grid-template-columns:140px 1fr auto;gap:10px;align-items:center;padding:10px;border:1px dashed var(--line);border-radius:8px;background:#fcfcfa}
+  .file-row.ok{border-style:solid;border-color:#bbf7d0;background:#f0fdf4}
+  .file-row label{font-weight:600;color:#374151}
+  .file-row .name{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+  .file-row .name b{color:var(--text);font-weight:600}
+  .file-row .name .multi{display:block;margin-top:2px;font-size:11px}
+  .file-row .name .multi span{display:inline-block;background:var(--soft);color:#4338ca;padding:1px 6px;border-radius:4px;margin:1px 3px 1px 0}
+  .file-row input[type=file]{display:none}
+  .btn{appearance:none;border:1px solid var(--line);background:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
+  .btn:hover{background:#f3f4f6}
+  .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);padding:10px 18px;font-weight:600;font-size:14px}
+  .btn-primary:hover{background:#4f46e5}
+  .btn-primary:disabled{background:#9ca3af;border-color:#9ca3af;cursor:not-allowed}
+  .actions{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+  .log{font-family:Consolas,Monaco,monospace;font-size:12px;background:#0f172a;color:#e2e8f0;padding:12px;border-radius:6px;max-height:340px;overflow:auto;white-space:pre-wrap;line-height:1.5}
+  .log .ok{color:#86efac}
+  .log .warn{color:#fbbf24}
+  .log .err{color:#fca5a5}
+  .log .dim{color:#64748b}
+  .log .head{color:#a5b4fc;font-weight:600;margin-top:8px;border-top:1px dashed #334155;padding-top:6px}
+  .summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
+  .summary div{padding:10px;background:#f9fafb;border:1px solid var(--line);border-radius:6px;text-align:center}
+  .summary b{display:block;font-size:18px;color:var(--accent)}
+  .summary span{font-size:11px;color:var(--muted)}
+  details{margin-top:10px}
+  details summary{cursor:pointer;font-size:12px;color:var(--muted)}
+  .footer{position:fixed;right:14px;bottom:8px;font-size:11px;color:#9ca3af}
+  .badge{display:inline-block;padding:3px 10px;border-radius:10px;font-size:11px;background:var(--soft);color:#4338ca}
+  .help{font-size:12px;color:var(--muted);background:#fffbeb;border:1px solid #fde68a;padding:10px 12px;border-radius:6px;margin-bottom:14px;line-height:1.7}
+  .help b{color:#92400e}
+  .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
+  .toast.show{opacity:1}
+  @media (max-width:640px){
+    .summary{grid-template-columns:repeat(2,1fr)}
+    .file-row{grid-template-columns:1fr;gap:6px}
+    .file-row label{font-size:13px}
+    .nav a{font-size:11px;padding:4px 8px}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="logo">
+      <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
+      <span>근태 집계 변환기</span>
+      <span class="ver" id="verBtn">v1.1.0</span>
+    </div>
+    <nav class="nav">
+      <a onclick="goTo('s-input')">📥 입력</a>
+      <a onclick="goTo('s-log')">📋 처리</a>
+      <a onclick="goTo('s-help')">❓ 사용법</a>
+      <a onclick="goTo('s-history')">📜 이력</a>
+    </nav>
+    <button class="install-btn" id="installBtn" onclick="installApp()">📲 설치</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <h1>📊 근태 집계 변환기</h1>
+  <p class="lead">기본자료 + SO템플릿(부서별 다중 가능) + 명단 → 해당 월 자동 채움. <b>파일은 브라우저 내에서만 처리됩니다.</b></p>
+
+  <div class="help" id="s-help">
+    <b>사용법</b><br>
+    1) 기본자료 1개 + SO템플릿 <b>여러 개</b>(부서별) + 명단 1개 선택<br>
+    2) <b>변환 실행</b> → 결과 ZIP 다운로드<br>
+    3) 우측 상단 <b>📲 설치</b> 누르면 바탕화면 앱처럼 사용 가능 (PWA)<br>
+    · 명단은 sample이라도 OK — 슬롯은 SO템플릿 기준으로 자동 인식
+  </div>
+
+  <div class="card" id="s-input">
+    <h2>① 입력 파일</h2>
+    <div class="files">
+      <div class="file-row" id="row-base">
+        <label>기본자료 (1개)</label>
+        <div class="name" id="name-base">선택된 파일 없음</div>
+        <button class="btn" onclick="document.getElementById('f-base').click()">파일 선택</button>
+        <input id="f-base" type="file" accept=".xlsx" onchange="onPickBase(this.files[0])">
+      </div>
+      <div class="file-row" id="row-tmpl">
+        <label>SO템플릿 (여러 개)</label>
+        <div class="name" id="name-tmpl">선택된 파일 없음</div>
+        <button class="btn" onclick="document.getElementById('f-tmpl').click()">파일 선택</button>
+        <input id="f-tmpl" type="file" accept=".xlsx" multiple onchange="onPickTmpl(this.files)">
+      </div>
+      <div class="file-row" id="row-list">
+        <label>명단 (1개)</label>
+        <div class="name" id="name-list">선택된 파일 없음</div>
+        <button class="btn" onclick="document.getElementById('f-list').click()">파일 선택</button>
+        <input id="f-list" type="file" accept=".xlsx" onchange="onPickList(this.files[0])">
+      </div>
+    </div>
+    <div class="actions">
+      <button id="runBtn" class="btn-primary btn" disabled onclick="run()">변환 실행</button>
+      <span id="targetMonth" class="badge" style="display:none"></span>
+    </div>
+  </div>
+
+  <div class="card" id="s-log" style="display:none">
+    <h2>② 처리 로그</h2>
+    <div class="summary" id="summary" style="display:none">
+      <div><b id="s-files">0</b><span>처리 파일</span></div>
+      <div><b id="s-people">0</b><span>처리 인원</span></div>
+      <div><b id="s-days">0</b><span>대상 일수</span></div>
+      <div><b id="s-miss">0</b><span>매칭 누락</span></div>
+    </div>
+    <details open><summary>로그 보기</summary><div class="log" id="log"></div></details>
+    <div class="actions">
+      <button id="dlBtn" class="btn-primary btn" style="display:none" onclick="download()">📦 결과 ZIP 다운로드</button>
+    </div>
+  </div>
+
+  <div class="card" id="s-history">
+    <h2>📜 업데이트 이력</h2>
+    <div style="font-size:12px;color:var(--muted);line-height:1.8">
+      <b>v1.1.0</b> (2026-05-06) — SO템플릿 다중 입력(부서별), ZIP 묶음 다운로드, 바로가기 메뉴, PWA 설치 지원, 아이콘 추가, <code>list is not defined</code> 버그 수정.<br>
+      <b>v1.0.1</b> (2026-05-06) — 일자 셀 UTC 처리.<br>
+      <b>v1.0.0</b> (2026-05-06) — 최초 버전.
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="footer">CDN &amp; Cloud is by Solbox..</div>
+
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>
+const state = {base:null, tmpls:[], list:null, outFiles:[], zipBlob:null, zipName:''};
+const $ = id => document.getElementById(id);
+const norm = s => (s||'').toString().replace(/\s+/g,'').trim();
+const pad = n => String(n).padStart(2,'0');
+
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1800);
+}
+function goTo(id){
+  const el = $(id); if(!el) return;
+  if(el.style.display === 'none') el.style.display = '';
+  el.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function log(msg, cls){
+  const el = $('log');
+  const d = document.createElement('div');
+  if(cls) d.className = cls;
+  d.textContent = msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+// File picks
+function onPickBase(file){
+  if(!file) return;
+  state.base = file;
+  $('name-base').innerHTML = '<b>' + file.name + '</b> (' + (file.size/1024).toFixed(1) + ' KB)';
+  $('row-base').classList.add('ok');
+  const m = file.name.match(/(\d{4})\D*(\d{1,2})/);
+  if(m){
+    const tm = $('targetMonth');
+    tm.textContent = m[1] + '년 ' + String(+m[2]).padStart(2,'0') + '월 대상';
+    tm.style.display = 'inline-block';
+  }
+  refreshRunBtn();
+}
+function onPickTmpl(files){
+  if(!files || !files.length) return;
+  state.tmpls = Array.from(files);
+  const tags = state.tmpls.map(f => '<span>' + f.name.replace(/\.xlsx$/i,'') + '</span>').join('');
+  $('name-tmpl').innerHTML = '<b>' + state.tmpls.length + '개 파일</b><div class="multi">' + tags + '</div>';
+  $('row-tmpl').classList.add('ok');
+  refreshRunBtn();
+}
+function onPickList(file){
+  if(!file) return;
+  state.list = file;
+  $('name-list').innerHTML = '<b>' + file.name + '</b> (' + (file.size/1024).toFixed(1) + ' KB)';
+  $('row-list').classList.add('ok');
+  refreshRunBtn();
+}
+function refreshRunBtn(){
+  $('runBtn').disabled = !(state.base && state.tmpls.length && state.list);
+}
+
+// Excel helpers
+function fracToHMS(f){
+  const total = Math.round(f*86400);
+  return pad(Math.floor(total/3600))+':'+pad(Math.floor(total%3600/60))+':'+pad(total%60);
+}
+function readTime(v){
+  if(v == null || v === '') return null;
+  if(typeof v === 'number'){
+    const total = Math.round(v*86400);
+    return {h:Math.floor(total/3600)%24, m:Math.floor(total%3600/60), s:total%60};
+  }
+  if(v instanceof Date) return {h:v.getHours(), m:v.getMinutes(), s:v.getSeconds()};
+  if(typeof v === 'string'){
+    const m = v.match(/(\d{1,2}):(\d{2}):(\d{2})/);
+    if(m) return {h:+m[1], m:+m[2], s:+m[3]};
+  }
+  return null;
+}
+function readDate(v){
+  if(!v) return null;
+  if(v instanceof Date) return v;
+  if(typeof v === 'number'){ return new Date((v - 25569) * 86400 * 1000); }
+  if(typeof v === 'string'){
+    const m = v.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+  }
+  return null;
+}
+
+// Build event map from 기본자료
+async function buildEvents(file){
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await file.arrayBuffer());
+  const ws = wb.worksheets[0];
+  const events = {};
+  let year = null, month = null, count = 0;
+  ws.eachRow((row, ri) => {
+    if(ri === 1) return;
+    const nm = row.getCell(3).value;
+    const dt = readDate(row.getCell(2).value);
+    const tm = readTime(row.getCell(4).value);
+    if(!nm || !dt || !tm) return;
+    if(year == null){ year = dt.getFullYear(); month = dt.getMonth()+1; }
+    const k = norm(nm);
+    const dk = dt.getFullYear()+'-'+pad(dt.getMonth()+1)+'-'+pad(dt.getDate());
+    (events[k] = events[k] || {});
+    (events[k][dk] = events[k][dk] || []).push(tm.h*3600 + tm.m*60 + tm.s);
+    count++;
+  });
+  return {events, year, month, count};
+}
+
+// Read 명단
+async function buildNamelist(file){
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await file.arrayBuffer());
+  const ws = wb.worksheets[0];
+  const out = [];
+  ws.eachRow((row, ri) => {
+    if(ri === 1) return;
+    const nm = row.getCell(1).value;
+    const dp = row.getCell(2).value;
+    if(nm) out.push({name: nm.toString().trim(), normName: norm(nm), dept: (dp||'').toString().trim()});
+  });
+  return out;
+}
+
+// Process one SO template file → returns {buffer, fileName, dept, slotsCount, missCount, peopleCount}
+async function processTemplate(tmplFile, events, year, month, namelist){
+  const deptName = tmplFile.name.replace(/\.xlsx$/i,'').replace(/_SO$/i,'').replace(/SO_?/i,'').trim() || tmplFile.name;
+  log('━ ' + tmplFile.name + ' (부서: ' + deptName + ')', 'head');
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await tmplFile.arrayBuffer());
+  const sheetName = pad(month) + '월';
+  const ws = wb.getWorksheet(sheetName);
+  if(!ws){
+    log('  ✗ ' + sheetName + ' 시트 없음 — 건너뜀', 'err');
+    return null;
+  }
+
+  ws.getCell(1,1).value = year + '년 ' + pad(month) + '월';
+
+  // Find slots
+  const slotCols = [1, 8, 15];
+  const slots = [];
+  const lastRow = ws.actualRowCount || ws.rowCount;
+  const labels = ['일자','출근시간','퇴근시간','근무시간','비고','근무일','연차휴가외','결근','총근무시간','평균근무시간','성명'];
+  for(let r = 1; r <= lastRow; r++){
+    for(const c of slotCols){
+      const v = ws.getCell(r, c).value;
+      if(typeof v !== 'string') continue;
+      const s = v.trim();
+      if(s.length > 7) continue;
+      const ns = norm(s);
+      if(ns.length < 2 || ns.length > 4) continue;
+      if(!/^[가-힣]+$/.test(ns)) continue;
+      if(labels.includes(ns)) continue;
+      let hdrRow = -1;
+      for(let dr = 1; dr <= 6; dr++){
+        const hv = ws.getCell(r+dr, c).value;
+        if(typeof hv === 'string' && norm(hv) === '일자'){ hdrRow = r+dr; break; }
+      }
+      if(hdrRow < 0) continue;
+      slots.push({name:s, normName:ns, nameRow:r, headerRow:hdrRow, col:c});
+    }
+  }
+  log('  · 슬롯 ' + slots.length + '명: ' + slots.map(x=>x.name).join(', '));
+
+  const dim = new Date(year, month, 0).getDate();
+  let missCount = 0;
+
+  for(const slot of slots){
+    const evs = events[slot.normName] || {};
+    let workDays = 0, totalSec = 0;
+    let hasAnyEvent = Object.keys(evs).length > 0;
+
+    for(let day = 1; day <= dim; day++){
+      const rowIdx = slot.headerRow + day;
+      const dk = year + '-' + pad(month) + '-' + pad(day);
+      const dayDate = new Date(Date.UTC(year, month-1, day));
+      ws.getCell(rowIdx, slot.col).value = dayDate;
+      ws.getCell(rowIdx, slot.col).numFmt = 'yyyy-mm-dd';
+      ws.getCell(rowIdx, slot.col+1).value = null;
+      ws.getCell(rowIdx, slot.col+2).value = null;
+      ws.getCell(rowIdx, slot.col+3).value = null;
+      ws.getCell(rowIdx, slot.col+4).value = null;
+
+      const list = evs[dk];
+      if(list && list.length >= 2){
+        const inSec = Math.min(...list);
+        const outSec = Math.max(...list);
+        let workSec = outSec - inSec - 3600;
+        if(workSec < 0) workSec = 0;
+        ws.getCell(rowIdx, slot.col+1).value = inSec/86400;
+        ws.getCell(rowIdx, slot.col+2).value = outSec/86400;
+        ws.getCell(rowIdx, slot.col+3).value = workSec/86400;
+        ws.getCell(rowIdx, slot.col+1).numFmt = 'hh:mm:ss';
+        ws.getCell(rowIdx, slot.col+2).numFmt = 'hh:mm:ss';
+        ws.getCell(rowIdx, slot.col+3).numFmt = 'hh:mm:ss';
+        workDays++;
+        totalSec += workSec;
+      } else if(list && list.length === 1){
+        ws.getCell(rowIdx, slot.col+4).value = '단일이벤트';
+      }
+    }
+
+    const sr = slot.nameRow + 1, tr = slot.nameRow + 2;
+    ws.getCell(sr, slot.col+1).value = workDays;
+    ws.getCell(sr, slot.col+3).value = Math.max(0, dim - workDays);
+    ws.getCell(sr, slot.col+5).value = 0;
+    ws.getCell(tr, slot.col+2).value = totalSec/86400;
+    ws.getCell(tr, slot.col+2).numFmt = '[h]:mm:ss';
+    const avg = workDays > 0 ? totalSec/workDays : 0;
+    ws.getCell(tr, slot.col+5).value = avg/86400;
+    ws.getCell(tr, slot.col+5).numFmt = 'hh:mm:ss';
+
+    if(!hasAnyEvent){ missCount++; }
+    log('    - ' + slot.name + ': 근무 ' + workDays + '일, 총 ' + fracToHMS(totalSec/86400) + ', 평균 ' + fracToHMS(avg/86400) + (hasAnyEvent ? '' : ' (이벤트 없음)'), hasAnyEvent ? null : 'warn');
+  }
+
+  // 명단 진단
+  if(namelist && namelist.length){
+    const slotNorms = new Set(slots.map(x=>x.normName));
+    // dept hint match
+    const deptCandidates = namelist.filter(n => n.dept && (n.dept.includes(deptName) || deptName.includes(n.dept)));
+    const sourceList = deptCandidates.length ? deptCandidates : namelist;
+    const missingFromTmpl = sourceList.filter(x => !slotNorms.has(x.normName));
+    const extraInTmpl = slots.filter(x => !sourceList.some(n => n.normName === x.normName));
+    if(missingFromTmpl.length) log('  ⚠ 명단엔 있고 템플릿엔 없는 인원: ' + missingFromTmpl.map(x=>x.name).join(', '), 'warn');
+    if(extraInTmpl.length) log('  ⚠ 템플릿엔 있고 명단엔 없는 인원: ' + extraInTmpl.map(x=>x.name).join(', '), 'warn');
+  }
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const outName = year + '년 ' + pad(month) + '월 ' + tmplFile.name.replace(/\.xlsx$/i,'') + '.xlsx';
+  return {buffer, fileName: outName, slotsCount: slots.length, missCount, dept: deptName};
+}
+
+async function run(){
+  $('s-log').style.display = '';
+  $('summary').style.display = 'none';
+  $('dlBtn').style.display = 'none';
+  $('log').innerHTML = '';
+  $('runBtn').disabled = true;
+  state.outFiles = []; state.zipBlob = null;
+
+  try {
+    log('▶ 시작', 'dim');
+
+    const namelist = await buildNamelist(state.list);
+    log('✓ 명단: ' + namelist.length + '명 (' + new Set(namelist.map(x=>x.dept)).size + '개 부서)', 'ok');
+
+    const {events, year, month, count} = await buildEvents(state.base);
+    if(!year) throw new Error('기본자료에서 대상 월을 찾을 수 없습니다.');
+    log('✓ 기본자료: ' + count + '건 이벤트, 대상 ' + year + '년 ' + pad(month) + '월', 'ok');
+
+    let totalPeople = 0, totalMiss = 0, processed = 0;
+    for(const tmpl of state.tmpls){
+      const r = await processTemplate(tmpl, events, year, month, namelist);
+      if(!r) continue;
+      state.outFiles.push(r);
+      totalPeople += r.slotsCount;
+      totalMiss += r.missCount;
+      processed++;
+    }
+
+    if(!state.outFiles.length) throw new Error('처리된 템플릿이 없습니다.');
+
+    // ZIP
+    const zip = new JSZip();
+    for(const f of state.outFiles) zip.file(f.fileName, f.buffer);
+    const zipBlob = await zip.generateAsync({type:'blob'});
+    state.zipBlob = zipBlob;
+    state.zipName = year + '년 ' + pad(month) + '월 근태집계.zip';
+
+    $('s-files').textContent = processed;
+    $('s-people').textContent = totalPeople;
+    $('s-days').textContent = new Date(year, month, 0).getDate();
+    $('s-miss').textContent = totalMiss;
+    $('summary').style.display = 'grid';
+    $('dlBtn').style.display = 'inline-block';
+
+    log('▶ 완료: ' + processed + '개 파일 → ' + state.zipName, 'ok');
+    toast('변환 완료! 다운로드 버튼 누르세요');
+  } catch(e) {
+    log('✗ 오류: ' + (e && e.message || e), 'err');
+    console.error(e);
+  } finally {
+    $('runBtn').disabled = false;
+  }
+}
+
+function download(){
+  if(state.outFiles.length === 1){
+    // single → just the xlsx
+    const f = state.outFiles[0];
+    const blob = new Blob([f.buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = f.fileName;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+    return;
+  }
+  if(!state.zipBlob) return;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(state.zipBlob);
+  a.download = state.zipName;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+
+// PWA install
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  $('installBtn').classList.add('show');
+});
+async function installApp(){
+  if(!deferredInstall){
+    toast('이미 설치되어 있거나 브라우저가 PWA 설치를 지원하지 않습니다');
+    return;
+  }
+  deferredInstall.prompt();
+  const r = await deferredInstall.userChoice;
+  if(r.outcome === 'accepted'){
+    toast('바탕화면에 설치되었습니다');
+    $('installBtn').classList.remove('show');
+  }
+  deferredInstall = null;
+}
+window.addEventListener('appinstalled', ()=>{
+  $('installBtn').classList.remove('show');
+  toast('설치 완료!');
+});
+
+// Service worker
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./service-worker.js').catch(e => console.warn('SW reg failed', e));
+  });
+}
+</script>
+</body>
+</html>
