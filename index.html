@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.1.1</title>
-<meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 자동 채움. 브라우저 내 처리, 외부 전송 없음.">
+<title>근태 집계 변환기 v1.2.0</title>
+<meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 새 시트 생성. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
@@ -13,7 +13,7 @@
   :root{
     --bg:#fafaf7; --card:#fff; --line:#e5e5e0; --text:#1f1f1f; --muted:#6b7280;
     --accent:#6366f1; --accent2:#818cf8; --ok:#15803d; --warn:#b45309; --err:#b91c1c;
-    --soft:#eef2ff;
+    --soft:#eef2ff; --drop:#dbeafe;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
@@ -21,11 +21,12 @@
   .topbar-inner{max-width:880px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:12px}
   .topbar .logo{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px}
   .topbar .logo svg{width:28px;height:28px}
-  .topbar .ver{font-size:11px;color:var(--muted);font-weight:500;padding:2px 8px;background:var(--soft);border-radius:10px;color:#4338ca}
+  .topbar .ver{font-size:11px;font-weight:500;padding:3px 10px;background:var(--soft);border-radius:10px;color:#4338ca;cursor:pointer;user-select:none;border:1px solid transparent;transition:all .15s}
+  .topbar .ver:hover{background:#c7d2fe;border-color:#a5b4fc}
   .nav{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
   .nav a{font-size:12px;color:var(--muted);padding:6px 10px;border-radius:6px;text-decoration:none;cursor:pointer}
   .nav a:hover{background:var(--soft);color:#4338ca}
-  .install-btn{font-size:12px;padding:6px 12px;background:var(--accent);color:#fff;border:0;border-radius:6px;cursor:pointer;display:none}
+  .install-btn{font-size:12px;padding:6px 12px;background:var(--accent);color:#fff;border:0;border-radius:6px;cursor:pointer;display:none;font-family:inherit}
   .install-btn:hover{background:#4f46e5}
   .install-btn.show{display:inline-block}
 
@@ -35,13 +36,17 @@
   .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:14px;scroll-margin-top:80px}
   .card h2{font-size:14px;margin:0 0 12px;color:#374151;display:flex;align-items:center;gap:6px}
   .files{display:grid;gap:10px}
-  .file-row{display:grid;grid-template-columns:140px 1fr auto;gap:10px;align-items:center;padding:10px;border:1px dashed var(--line);border-radius:8px;background:#fcfcfa}
+  .file-row{display:grid;grid-template-columns:140px 1fr auto;gap:10px;align-items:center;padding:14px;border:2px dashed var(--line);border-radius:10px;background:#fcfcfa;transition:all .15s;cursor:default}
   .file-row.ok{border-style:solid;border-color:#bbf7d0;background:#f0fdf4}
+  .file-row.dragover{border-color:var(--accent);background:var(--drop);transform:scale(1.005);box-shadow:0 4px 16px rgba(99,102,241,.18)}
+  .file-row.dragover label,.file-row.dragover .name{color:#4338ca}
   .file-row label{font-weight:600;color:#374151}
-  .file-row .name{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+  .file-row label small{display:block;font-weight:400;font-size:10px;color:var(--muted);margin-top:2px}
+  .file-row .name{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;line-height:1.4;min-height:18px}
   .file-row .name b{color:var(--text);font-weight:600}
-  .file-row .name .multi{display:block;margin-top:2px;font-size:11px}
-  .file-row .name .multi span{display:inline-block;background:var(--soft);color:#4338ca;padding:1px 6px;border-radius:4px;margin:1px 3px 1px 0}
+  .file-row .name .multi{display:block;margin-top:4px;font-size:11px}
+  .file-row .name .multi span{display:inline-block;background:var(--soft);color:#4338ca;padding:2px 8px;border-radius:4px;margin:1px 3px 1px 0}
+  .file-row .hint{color:#9ca3af;font-style:italic}
   .file-row input[type=file]{display:none}
   .btn{appearance:none;border:1px solid var(--line);background:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
   .btn:hover{background:#f3f4f6}
@@ -67,11 +72,26 @@
   .help b{color:#92400e}
   .toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);background:#0f172a;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
   .toast.show{opacity:1}
+  /* Modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;z-index:80;padding:20px}
+  .modal-bg.show{display:flex}
+  .modal{background:#fff;max-width:520px;width:100%;max-height:80vh;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 48px rgba(0,0,0,.2)}
+  .modal-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .modal-head h3{margin:0;font-size:16px}
+  .modal-close{margin-left:auto;background:none;border:0;font-size:18px;cursor:pointer;color:var(--muted);padding:4px 10px;border-radius:6px;font-family:inherit}
+  .modal-close:hover{background:#f3f4f6;color:var(--text)}
+  .modal-body{padding:18px 20px;overflow:auto;font-size:13px;line-height:1.8;color:#374151}
+  .modal-body h4{margin:14px 0 4px;font-size:13px;color:var(--accent);font-weight:700}
+  .modal-body h4:first-child{margin-top:0}
+  .modal-body ul{margin:0;padding-left:18px}
+  .modal-body code{background:#f3f4f6;padding:1px 6px;border-radius:4px;font-size:11px}
+
   @media (max-width:640px){
     .summary{grid-template-columns:repeat(2,1fr)}
-    .file-row{grid-template-columns:1fr;gap:6px}
+    .file-row{grid-template-columns:1fr;gap:8px;text-align:center}
     .file-row label{font-size:13px}
     .nav a{font-size:11px;padding:4px 8px}
+    .topbar .logo span:nth-child(2){display:none}
   }
 </style>
 </head>
@@ -82,13 +102,13 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn">v1.1.1</span>
+      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.0</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
       <a onclick="goTo('s-log')">📋 처리</a>
       <a onclick="goTo('s-help')">❓ 사용법</a>
-      <a onclick="goTo('s-history')">📜 이력</a>
+      <a onclick="showChangelog()">📜 이력</a>
     </nav>
     <button class="install-btn" id="installBtn" onclick="installApp()">📲 설치</button>
   </div>
@@ -96,34 +116,36 @@
 
 <div class="wrap">
   <h1>📊 근태 집계 변환기</h1>
-  <p class="lead">기본자료 + SO템플릿(부서별 다중 가능) + 명단 → 해당 월 자동 채움. <b>파일은 브라우저 내에서만 처리됩니다.</b></p>
+  <p class="lead">기본자료 + SO템플릿(부서별 다중) + 명단 → <b>새 시트(YYYY-MM월)</b>로 자동 생성. 기존 시트는 절대 건드리지 않습니다.</p>
 
   <div class="help" id="s-help">
     <b>사용법</b><br>
-    1) 기본자료 1개 + SO템플릿 <b>여러 개</b>(부서별) + 명단 1개 선택<br>
-    2) <b>변환 실행</b> → 결과 ZIP 다운로드<br>
-    3) 우측 상단 <b>📲 설치</b> 누르면 바탕화면 앱처럼 사용 가능 (PWA)<br>
-    · 명단은 sample이라도 OK — 슬롯은 SO템플릿 기준으로 자동 인식
+    1) 각 영역에 파일을 <b>드래그&드롭</b> 하거나 <b>파일 선택</b> 클릭<br>
+    2) <b>변환 실행</b> → 결과 ZIP/xlsx 다운로드<br>
+    3) 결과 파일에는 <b>YYYY-MM월</b> 새 시트가 생성되고, 기존 04월/05월 등 시트는 그대로<br>
+    · 기본자료는 A·B·C·D 열만 사용 (이벤트 로그)<br>
+    · SO템플릿은 한 파일에 여러 팀 블록 OK, 여러 파일도 OK<br>
+    · 새 시트 이름이 이미 존재하면 <b>오류로 중단</b> (덮어쓰기 방지)
   </div>
 
   <div class="card" id="s-input">
-    <h2>① 입력 파일</h2>
+    <h2>① 입력 파일 (드래그&드롭 가능)</h2>
     <div class="files">
-      <div class="file-row" id="row-base">
-        <label>기본자료 (1개)</label>
-        <div class="name" id="name-base">선택된 파일 없음</div>
+      <div class="file-row" id="row-base" data-kind="base">
+        <label>기본자료<small>1개 · A~D열</small></label>
+        <div class="name" id="name-base"><span class="hint">파일을 끌어다 놓거나 우측 버튼</span></div>
         <button class="btn" onclick="document.getElementById('f-base').click()">파일 선택</button>
         <input id="f-base" type="file" accept=".xlsx" onchange="onPickBase(this.files[0])">
       </div>
-      <div class="file-row" id="row-tmpl">
-        <label>SO템플릿 (여러 개)</label>
-        <div class="name" id="name-tmpl">선택된 파일 없음</div>
+      <div class="file-row" id="row-tmpl" data-kind="tmpl">
+        <label>SO템플릿<small>여러 개 가능 · 부서별</small></label>
+        <div class="name" id="name-tmpl"><span class="hint">여러 팀 파일을 한 번에 선택/드롭 가능</span></div>
         <button class="btn" onclick="document.getElementById('f-tmpl').click()">파일 선택</button>
         <input id="f-tmpl" type="file" accept=".xlsx" multiple onchange="onPickTmpl(this.files)">
       </div>
-      <div class="file-row" id="row-list">
-        <label>명단 (1개)</label>
-        <div class="name" id="name-list">선택된 파일 없음</div>
+      <div class="file-row" id="row-list" data-kind="list">
+        <label>명단<small>1개 · 변경 OK</small></label>
+        <div class="name" id="name-list"><span class="hint">샘플이라도 OK · 슬롯은 템플릿 기준</span></div>
         <button class="btn" onclick="document.getElementById('f-list').click()">파일 선택</button>
         <input id="f-list" type="file" accept=".xlsx" onchange="onPickList(this.files[0])">
       </div>
@@ -144,16 +166,42 @@
     </div>
     <details open><summary>로그 보기</summary><div class="log" id="log"></div></details>
     <div class="actions">
-      <button id="dlBtn" class="btn-primary btn" style="display:none" onclick="download()">📦 결과 ZIP 다운로드</button>
+      <button id="dlBtn" class="btn-primary btn" style="display:none" onclick="download()">📦 결과 다운로드</button>
     </div>
   </div>
+</div>
 
-  <div class="card" id="s-history">
-    <h2>📜 업데이트 이력</h2>
-    <div style="font-size:12px;color:var(--muted);line-height:1.8">
-      <b>v1.1.1</b> (2026-05-06) — SO템플릿 다중 입력(부서별), ZIP 묶음 다운로드, 바로가기 메뉴, PWA 설치 지원, 아이콘 추가, <code>list is not defined</code> 버그 수정.<br>
-      <b>v1.0.1</b> (2026-05-06) — 일자 셀 UTC 처리.<br>
-      <b>v1.0.0</b> (2026-05-06) — 최초 버전.
+<!-- Changelog modal -->
+<div class="modal-bg" id="changelogBg" onclick="if(event.target===this)hideChangelog()">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>📜 변경 이력</h3>
+      <button class="modal-close" onclick="hideChangelog()">✕</button>
+    </div>
+    <div class="modal-body">
+      <h4>v1.2.0 (2026-05-06)</h4>
+      <ul>
+        <li><b>새 시트 패턴</b> — 결과는 항상 <code>YYYY-MM월</code> 새 시트에 작성. 기존 시트(04월 등) 절대 미변경</li>
+        <li><b>덮어쓰기 방지</b> — 동일 이름 시트가 이미 있으면 오류로 중단</li>
+        <li><b>드래그&드롭</b> — 3개 영역 모두 파일 끌어다 놓기 가능</li>
+        <li><b>이력 팝업</b> — 우측 상단 버전 칩 / "이력" 메뉴 클릭으로 표시</li>
+        <li><b>다중 팀 템플릿</b> — 한 파일에 여러 팀 블록 OK (자동 슬롯 인식)</li>
+      </ul>
+      <h4>v1.1.1 (2026-05-06)</h4>
+      <ul>
+        <li>시간 +9h 시프트 버그 수정 (UTC getter)</li>
+        <li>대상 월 시트 자동 unhide</li>
+      </ul>
+      <h4>v1.1.0 (2026-05-06)</h4>
+      <ul>
+        <li>SO템플릿 다중 입력, ZIP 묶음 다운로드</li>
+        <li>바로가기 메뉴, PWA 설치, 아이콘</li>
+        <li><code>list is not defined</code> 버그 수정</li>
+      </ul>
+      <h4>v1.0.x (2026-05-06)</h4>
+      <ul>
+        <li>최초 버전 + 일자 셀 UTC 처리</li>
+      </ul>
     </div>
   </div>
 </div>
@@ -169,15 +217,20 @@ const $ = id => document.getElementById(id);
 const norm = s => (s||'').toString().replace(/\s+/g,'').trim();
 const pad = n => String(n).padStart(2,'0');
 
-function toast(msg){
+function toast(msg, ms){
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 1800);
+  setTimeout(()=>t.classList.remove('show'), ms || 1800);
 }
 function goTo(id){
   const el = $(id); if(!el) return;
   if(el.style.display === 'none') el.style.display = '';
   el.scrollIntoView({behavior:'smooth', block:'start'});
 }
+function showChangelog(){ $('changelogBg').classList.add('show'); }
+function hideChangelog(){ $('changelogBg').classList.remove('show'); }
+$('verBtn').addEventListener('click', showChangelog);
+window.addEventListener('keydown', e => { if(e.key === 'Escape') hideChangelog(); });
+
 function log(msg, cls){
   const el = $('log');
   const d = document.createElement('div');
@@ -187,7 +240,7 @@ function log(msg, cls){
   el.scrollTop = el.scrollHeight;
 }
 
-// File picks
+// ---------- File picks ----------
 function onPickBase(file){
   if(!file) return;
   state.base = file;
@@ -203,7 +256,7 @@ function onPickBase(file){
 }
 function onPickTmpl(files){
   if(!files || !files.length) return;
-  state.tmpls = Array.from(files);
+  state.tmpls = Array.from(files).filter(f => /\.xlsx$/i.test(f.name));
   const tags = state.tmpls.map(f => '<span>' + f.name.replace(/\.xlsx$/i,'') + '</span>').join('');
   $('name-tmpl').innerHTML = '<b>' + state.tmpls.length + '개 파일</b><div class="multi">' + tags + '</div>';
   $('row-tmpl').classList.add('ok');
@@ -220,7 +273,38 @@ function refreshRunBtn(){
   $('runBtn').disabled = !(state.base && state.tmpls.length && state.list);
 }
 
-// Excel helpers
+// ---------- Drag & Drop (per-zone depth counter pattern) ----------
+function wireDropZone(el, kind){
+  let depth = 0;
+  el.addEventListener('dragenter', e => {
+    e.preventDefault();
+    if(++depth === 1) el.classList.add('dragover');
+  });
+  el.addEventListener('dragover', e => {
+    e.preventDefault();
+    if(e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  el.addEventListener('dragleave', e => {
+    e.preventDefault();
+    if(--depth === 0) el.classList.remove('dragover');
+  });
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    depth = 0; el.classList.remove('dragover');
+    const files = e.dataTransfer && e.dataTransfer.files;
+    if(!files || !files.length) return;
+    const xlsx = Array.from(files).filter(f => /\.xlsx$/i.test(f.name));
+    if(!xlsx.length){ toast('xlsx 파일만 가능합니다'); return; }
+    if(kind === 'base') onPickBase(xlsx[0]);
+    else if(kind === 'list') onPickList(xlsx[0]);
+    else if(kind === 'tmpl') onPickTmpl(xlsx);
+  });
+}
+['base','tmpl','list'].forEach(k => wireDropZone($('row-'+k), k));
+// Prevent browser navigation when dropping outside zones
+['dragover','drop'].forEach(ev => window.addEventListener(ev, e => e.preventDefault()));
+
+// ---------- Excel helpers ----------
 function fracToHMS(f){
   const total = Math.round(f*86400);
   return pad(Math.floor(total/3600))+':'+pad(Math.floor(total%3600/60))+':'+pad(total%60);
@@ -231,7 +315,6 @@ function readTime(v){
     const total = Math.round(v*86400);
     return {h:Math.floor(total/3600)%24, m:Math.floor(total%3600/60), s:total%60};
   }
-  // ExcelJS returns time cells as UTC-anchored Date (epoch 1899-12-30) — must use UTC getters
   if(v instanceof Date) return {h:v.getUTCHours(), m:v.getUTCMinutes(), s:v.getUTCSeconds()};
   if(typeof v === 'string'){
     const m = v.match(/(\d{1,2}):(\d{2}):(\d{2})/);
@@ -241,7 +324,6 @@ function readTime(v){
 }
 function readDate(v){
   if(!v) return null;
-  // ExcelJS returns date cells as UTC-anchored Date — use UTC parts to avoid tz shift
   if(v instanceof Date) return new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate());
   if(typeof v === 'number'){ return new Date((v - 25569) * 86400 * 1000); }
   if(typeof v === 'string'){
@@ -251,7 +333,7 @@ function readDate(v){
   return null;
 }
 
-// Build event map from 기본자료
+// Read 기본자료 (only A~D columns: A=사번이름, B=발생일자, C=이름, D=발생시각)
 async function buildEvents(file){
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await file.arrayBuffer());
@@ -274,7 +356,6 @@ async function buildEvents(file){
   return {events, year, month, count};
 }
 
-// Read 명단
 async function buildNamelist(file){
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await file.arrayBuffer());
@@ -289,32 +370,13 @@ async function buildNamelist(file){
   return out;
 }
 
-// Process one SO template file → returns {buffer, fileName, dept, slotsCount, missCount, peopleCount}
-async function processTemplate(tmplFile, events, year, month, namelist){
-  const deptName = tmplFile.name.replace(/\.xlsx$/i,'').replace(/_SO$/i,'').replace(/SO_?/i,'').trim() || tmplFile.name;
-  log('━ ' + tmplFile.name + ' (부서: ' + deptName + ')', 'head');
-
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(await tmplFile.arrayBuffer());
-  const sheetName = pad(month) + '월';
-  const ws = wb.getWorksheet(sheetName);
-  if(!ws){
-    log('  ✗ ' + sheetName + ' 시트 없음 — 건너뜀', 'err');
-    return null;
-  }
-
-  ws.getCell(1,1).value = year + '년 ' + pad(month) + '월';
-  // 대상 월 시트가 숨겨져 있으면 보이게 (원본 템플릿이 04~12월을 hidden 처리)
-  if(ws.state && ws.state !== 'visible') ws.state = 'visible';
-  // 다른 시트 visibility는 그대로 유지
-
-  // Find slots
-  const slotCols = [1, 8, 15];
+// Find name slots inside a worksheet (cols 1, 8, 15) — supports multiple team blocks
+function findSlots(ws){
+  const labels = ['일자','출근시간','퇴근시간','근무시간','비고','근무일','연차휴가외','결근','총근무시간','평균근무시간','성명'];
   const slots = [];
   const lastRow = ws.actualRowCount || ws.rowCount;
-  const labels = ['일자','출근시간','퇴근시간','근무시간','비고','근무일','연차휴가외','결근','총근무시간','평균근무시간','성명'];
   for(let r = 1; r <= lastRow; r++){
-    for(const c of slotCols){
+    for(const c of [1, 8, 15]){
       const v = ws.getCell(r, c).value;
       if(typeof v !== 'string') continue;
       const s = v.trim();
@@ -332,6 +394,85 @@ async function processTemplate(tmplFile, events, year, month, namelist){
       slots.push({name:s, normName:ns, nameRow:r, headerRow:hdrRow, col:c});
     }
   }
+  return slots;
+}
+
+// Deep-clone a worksheet within a workbook (model-based + manual merge re-apply)
+function cloneSheet(wb, sourceWs, newName){
+  const dst = wb.addWorksheet(newName);
+  // model-based copy. Bypass private name/id which ExcelJS controls.
+  const m = sourceWs.model;
+  const cloned = JSON.parse(JSON.stringify(m, (k, v) => v));
+  cloned.name = newName;
+  cloned.id = dst.id;
+  cloned.orderNo = dst.orderNo;
+  // Some properties shouldn't be copied (e.g. sheetId)
+  delete cloned.sheetId;
+  try { dst.model = cloned; } catch(e) {
+    // fallback: cell-by-cell
+    sourceWs.eachRow((row, ri) => {
+      row.eachCell({includeEmpty: true}, (cell, ci) => {
+        const newCell = dst.getCell(ri, ci);
+        newCell.value = cell.value;
+        if(cell.style) newCell.style = JSON.parse(JSON.stringify(cell.style));
+      });
+    });
+  }
+  // Re-apply merges (model copy may drop them)
+  if(sourceWs._merges){
+    for(const k of Object.keys(sourceWs._merges)){
+      const mg = sourceWs._merges[k];
+      try { dst.unMergeCells(mg.top, mg.left, mg.bottom, mg.right); } catch(e){}
+      try { dst.mergeCells(mg.top, mg.left, mg.bottom, mg.right); } catch(e){}
+    }
+  }
+  // Column widths
+  if(sourceWs.columns){
+    sourceWs.columns.forEach((col, i) => {
+      if(col && col.width) dst.getColumn(i+1).width = col.width;
+    });
+  }
+  // Row heights
+  sourceWs.eachRow((row, ri) => {
+    if(row.height) dst.getRow(ri).height = row.height;
+  });
+  // Make new sheet visible regardless of source
+  dst.state = 'visible';
+  return dst;
+}
+
+// Process one SO template file
+async function processTemplate(tmplFile, events, year, month, namelist){
+  const baseName = tmplFile.name.replace(/\.xlsx$/i,'');
+  const deptName = baseName.replace(/_SO$/i,'').replace(/SO_?/i,'').trim() || baseName;
+  log('━ ' + tmplFile.name + ' (부서: ' + deptName + ')', 'head');
+
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(await tmplFile.arrayBuffer());
+
+  const sourceMonthName = pad(month) + '월';
+  const newSheetName = year + '-' + pad(month) + '월';  // e.g. "2026-04월"
+
+  // Check duplicate target sheet — must error per requirement
+  if(wb.getWorksheet(newSheetName)){
+    log('  ✗ 이미 "' + newSheetName + '" 시트가 존재합니다 — 덮어쓰기 방지로 중단', 'err');
+    return null;
+  }
+  const sourceWs = wb.getWorksheet(sourceMonthName);
+  if(!sourceWs){
+    log('  ✗ 원본 ' + sourceMonthName + ' 시트가 없습니다 — 건너뜀', 'err');
+    return null;
+  }
+
+  // Clone source sheet structure into new sheet (NEVER modify sourceWs)
+  const ws = cloneSheet(wb, sourceWs, newSheetName);
+  log('  · "' + sourceMonthName + '" 구조 복사 → 새 시트 "' + newSheetName + '" 생성');
+
+  // Update title in the NEW sheet only
+  ws.getCell(1,1).value = year + '년 ' + pad(month) + '월';
+
+  // Find slots IN THE NEW SHEET (it carries the same structure as source)
+  const slots = findSlots(ws);
   log('  · 슬롯 ' + slots.length + '명: ' + slots.map(x=>x.name).join(', '));
 
   const dim = new Date(year, month, 0).getDate();
@@ -340,7 +481,7 @@ async function processTemplate(tmplFile, events, year, month, namelist){
   for(const slot of slots){
     const evs = events[slot.normName] || {};
     let workDays = 0, totalSec = 0;
-    let hasAnyEvent = Object.keys(evs).length > 0;
+    const hasAnyEvent = Object.keys(evs).length > 0;
 
     for(let day = 1; day <= dim; day++){
       const rowIdx = slot.headerRow + day;
@@ -389,7 +530,6 @@ async function processTemplate(tmplFile, events, year, month, namelist){
   // 명단 진단
   if(namelist && namelist.length){
     const slotNorms = new Set(slots.map(x=>x.normName));
-    // dept hint match
     const deptCandidates = namelist.filter(n => n.dept && (n.dept.includes(deptName) || deptName.includes(n.dept)));
     const sourceList = deptCandidates.length ? deptCandidates : namelist;
     const missingFromTmpl = sourceList.filter(x => !slotNorms.has(x.normName));
@@ -399,7 +539,7 @@ async function processTemplate(tmplFile, events, year, month, namelist){
   }
 
   const buffer = await wb.xlsx.writeBuffer();
-  const outName = year + '년 ' + pad(month) + '월 ' + tmplFile.name.replace(/\.xlsx$/i,'') + '.xlsx';
+  const outName = year + '년 ' + pad(month) + '월 ' + baseName + '.xlsx';
   return {buffer, fileName: outName, slotsCount: slots.length, missCount, dept: deptName};
 }
 
@@ -423,22 +563,26 @@ async function run(){
 
     let totalPeople = 0, totalMiss = 0, processed = 0;
     for(const tmpl of state.tmpls){
-      const r = await processTemplate(tmpl, events, year, month, namelist);
-      if(!r) continue;
-      state.outFiles.push(r);
-      totalPeople += r.slotsCount;
-      totalMiss += r.missCount;
-      processed++;
+      try {
+        const r = await processTemplate(tmpl, events, year, month, namelist);
+        if(!r) continue;
+        state.outFiles.push(r);
+        totalPeople += r.slotsCount;
+        totalMiss += r.missCount;
+        processed++;
+      } catch(e){
+        log('  ✗ ' + tmpl.name + ' 처리 실패: ' + e.message, 'err');
+      }
     }
 
     if(!state.outFiles.length) throw new Error('처리된 템플릿이 없습니다.');
 
-    // ZIP
-    const zip = new JSZip();
-    for(const f of state.outFiles) zip.file(f.fileName, f.buffer);
-    const zipBlob = await zip.generateAsync({type:'blob'});
-    state.zipBlob = zipBlob;
-    state.zipName = year + '년 ' + pad(month) + '월 근태집계.zip';
+    if(state.outFiles.length > 1){
+      const zip = new JSZip();
+      for(const f of state.outFiles) zip.file(f.fileName, f.buffer);
+      state.zipBlob = await zip.generateAsync({type:'blob'});
+      state.zipName = year + '년 ' + pad(month) + '월 근태집계.zip';
+    }
 
     $('s-files').textContent = processed;
     $('s-people').textContent = totalPeople;
@@ -447,8 +591,8 @@ async function run(){
     $('summary').style.display = 'grid';
     $('dlBtn').style.display = 'inline-block';
 
-    log('▶ 완료: ' + processed + '개 파일 → ' + state.zipName, 'ok');
-    toast('변환 완료! 다운로드 버튼 누르세요');
+    log('▶ 완료: ' + processed + '개 파일' + (state.outFiles.length > 1 ? ' → ' + state.zipName : ' → ' + state.outFiles[0].fileName), 'ok');
+    toast('변환 완료! 다운로드 버튼을 누르세요', 2400);
   } catch(e) {
     log('✗ 오류: ' + (e && e.message || e), 'err');
     console.error(e);
@@ -459,7 +603,6 @@ async function run(){
 
 function download(){
   if(state.outFiles.length === 1){
-    // single → just the xlsx
     const f = state.outFiles[0];
     const blob = new Blob([f.buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
@@ -477,7 +620,7 @@ function download(){
   setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
 }
 
-// PWA install
+// ---------- PWA ----------
 let deferredInstall = null;
 window.addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
@@ -486,7 +629,7 @@ window.addEventListener('beforeinstallprompt', e => {
 });
 async function installApp(){
   if(!deferredInstall){
-    toast('이미 설치되어 있거나 브라우저가 PWA 설치를 지원하지 않습니다');
+    toast('이미 설치되었거나 브라우저가 PWA 설치를 지원하지 않습니다');
     return;
   }
   deferredInstall.prompt();
@@ -501,8 +644,6 @@ window.addEventListener('appinstalled', ()=>{
   $('installBtn').classList.remove('show');
   toast('설치 완료!');
 });
-
-// Service worker
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
     navigator.serviceWorker.register('./service-worker.js').catch(e => console.warn('SW reg failed', e));

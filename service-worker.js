@@ -1,4 +1,4 @@
-const CACHE = 'gtg-v1.1.1';
+const CACHE = 'gtg-v1.2.0';
 const ASSETS = [
   './',
   './index.html',
