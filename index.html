@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.2.3</title>
+<title>근태 집계 변환기 v1.2.4</title>
 <meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 새 시트 생성. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
@@ -102,7 +102,7 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.3</span>
+      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.4</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
@@ -178,10 +178,15 @@
       <button class="modal-close" onclick="hideChangelog()">✕</button>
     </div>
     <div class="modal-body">
+      <h4>v1.2.4 (2026-05-06)</h4>
+      <ul>
+        <li><b>슬롯 자동 추가</b> — 명단 인원 &gt; 슬롯 수일 때 row-group을 자동 복사해 부족분 채움 (강채현·서용석·김미경 등 미반영 해소)</li>
+        <li><b>근무시간 수식</b> — 일자별 근무시간 셀에 <code>=퇴근-출근-TIME(1,0,0)</code> 입력. 출근·퇴근 비어있으면 수식 미입력 (에러 방지)</li>
+        <li><b>노란색 셀</b> — 출근·퇴근·근무 3셀이 모두 비면 노란색, 데이터가 있으면 노란색 제거</li>
+      </ul>
       <h4>v1.2.3 (2026-05-06)</h4>
       <ul>
-        <li><b>시트명은 기존 패턴 유지</b> — 결과는 <code>04월</code> 시트에 직접 작성 (이전 <code>2026-04월</code> 분리 시트 폐기). 시트는 자동 unhide</li>
-        <li><b>외곽선·서식 보존</b> — 시트 클론을 제거하고 in-place 작성. ExcelJS 클론 시 발생하던 마지막 행 외곽선 손실 해결</li>
+        <li>시트명 04월 패턴, in-place 작성으로 외곽선 보존</li>
       </ul>
       <h4>v1.2.2 (2026-05-06)</h4>
       <ul>
@@ -386,6 +391,60 @@ async function buildNamelist(file){
   return out;
 }
 
+// Excel column letter
+function colLetter(n){
+  let s = '';
+  while(n > 0){ s = String.fromCharCode(65 + (n-1)%26) + s; n = Math.floor((n-1)/26); }
+  return s;
+}
+
+// 노란색·없음 fill 정의 (사용자 룰: 출근·퇴근·근무 3셀이 모두 비면 노란색)
+const FILL_YELLOW = {type:'pattern', pattern:'solid', fgColor:{argb:'FFFFFF00'}};
+const FILL_NONE = {type:'pattern', pattern:'none'};
+
+// 슬롯 row-group을 자동으로 추가 (명단 인원 > 슬롯 수일 때)
+// group height = 첫·둘째 그룹의 nameRow 차이. 그룹 1을 마지막 그룹 다음으로 복사.
+function appendRowGroup(ws, allSlots){
+  if(!allSlots.length) return;
+  const firstNameRow = allSlots[0].nameRow;
+  let groupHeight = 36; // typical
+  for(const s of allSlots){ if(s.nameRow > firstNameRow){ groupHeight = s.nameRow - firstNameRow; break; } }
+  const sourceStart = firstNameRow;
+  const sourceEnd = firstNameRow + groupHeight - 1;
+  let lastGroupNameRow = firstNameRow;
+  for(const s of allSlots){ if(s.nameRow > lastGroupNameRow) lastGroupNameRow = s.nameRow; }
+  const destStart = lastGroupNameRow + groupHeight;
+
+  const ncols = Math.max(23, ws.actualColumnCount || 23);
+  for(let dr = 0; dr < groupHeight; dr++){
+    const srcR = sourceStart + dr, dstR = destStart + dr;
+    const srcRow = ws.getRow(srcR);
+    if(srcRow.height) ws.getRow(dstR).height = srcRow.height;
+    for(let c = 1; c <= ncols; c++){
+      const sc = ws.getCell(srcR, c);
+      const dc = ws.getCell(dstR, c);
+      if(sc.value !== null && sc.value !== undefined){
+        if(!(typeof sc.value === 'object' && sc.value.formula)){
+          dc.value = sc.value;
+        }
+      }
+      if(sc.style){ try { dc.style = JSON.parse(JSON.stringify(sc.style)); } catch(e){} }
+    }
+  }
+  // Re-apply merges with offset
+  const offset = destStart - sourceStart;
+  if(ws._merges){
+    const srcMerges = [];
+    for(const k of Object.keys(ws._merges)){
+      const m = ws._merges[k];
+      if(m.top >= sourceStart && m.bottom <= sourceEnd) srcMerges.push({...m});
+    }
+    for(const m of srcMerges){
+      try { ws.mergeCells(m.top + offset, m.left, m.bottom + offset, m.right); } catch(e){}
+    }
+  }
+}
+
 // Find name slots inside a worksheet (cols 1, 8, 15) — supports multiple team blocks
 function findSlots(ws){
   const labels = ['일자','출근시간','퇴근시간','근무시간','비고','근무일','연차휴가외','결근','총근무시간','평균근무시간','성명'];
@@ -476,8 +535,21 @@ async function processTemplate(tmplFile, events, year, month, namelist){
     log('  ⚠ 명단에서 "' + deptName + '" 부서 인원을 찾을 수 없습니다.', 'warn');
   }
 
-  // 템플릿의 슬롯 위치(좌→우, 위→아래 순)에 명단 멤버를 순서대로 배정
-  const allSlots = findSlots(ws);
+  // 템플릿의 슬롯 탐지
+  let allSlots = findSlots(ws);
+  const initialSlotCount = allSlots.length;
+
+  // 명단 인원 > 슬롯 수 → row-group 자동 추가
+  let appendedGroups = 0;
+  while(allSlots.length < deptMembers.length && appendedGroups < 10){
+    appendRowGroup(ws, allSlots);
+    allSlots = findSlots(ws);
+    appendedGroups++;
+  }
+  if(appendedGroups > 0){
+    log('  · 명단 인원 ' + deptMembers.length + '명 수용 위해 row-group ' + appendedGroups + '개 자동 추가 (' + initialSlotCount + ' → ' + allSlots.length + ')');
+  }
+
   const dim = new Date(year, month, 0).getDate();
 
   const N = Math.min(allSlots.length, deptMembers.length);
@@ -488,19 +560,26 @@ async function processTemplate(tmplFile, events, year, month, namelist){
   for(let i = N; i < allSlots.length; i++) emptySlots.push(allSlots[i]);
   for(let i = N; i < deptMembers.length; i++) overflowMembers.push(deptMembers[i]);
 
-  log('  · 명단 부서 인원 ' + deptMembers.length + '명, 템플릿 슬롯 ' + allSlots.length + '개, 작성 ' + writeSlots.length + '명');
+  log('  · 명단 부서 인원 ' + deptMembers.length + '명, 슬롯 ' + allSlots.length + '개, 작성 ' + writeSlots.length + '명');
   if(writeSlots.length) log('    작성: ' + writeSlots.map(w=>w.member.name).join(', '));
-  if(emptySlots.length) log('    빈 슬롯(명단 인원 부족): ' + emptySlots.length + '개');
-  if(overflowMembers.length) log('  ⚠ 템플릿 슬롯 부족으로 미반영: ' + overflowMembers.map(m=>m.name).join(', ') + ' — SO템플릿에 슬롯을 추가해 주세요', 'warn');
+  if(emptySlots.length) log('    빈 슬롯: ' + emptySlots.length + '개 (명단 인원보다 슬롯이 많음)');
+  if(overflowMembers.length) log('  ⚠ 자동 슬롯 추가 한계 초과: ' + overflowMembers.map(m=>m.name).join(', '), 'warn');
 
   let missCount = 0;
 
-  // 1) 빈 슬롯은 블록 전체 클리어 (이름·통계·헤더·일자별 줄)
+  // 1) 빈 슬롯은 블록 전체 클리어 + 일자별 출/퇴/근무 셀 노란색
   for(const slot of emptySlots){
     const blockCols = [slot.col, slot.col+1, slot.col+2, slot.col+3, slot.col+4, slot.col+5];
     const blockRows = [slot.nameRow, slot.nameRow+1, slot.nameRow+2, slot.headerRow];
     for(let day = 1; day <= dim; day++) blockRows.push(slot.headerRow + day);
     blockRows.forEach(r => blockCols.forEach(c => { ws.getCell(r, c).value = null; }));
+    // 일자별 출/퇴/근무 셀 노란색 (모두 빈 상태)
+    for(let day = 1; day <= dim; day++){
+      const r = slot.headerRow + day;
+      ws.getCell(r, slot.col+1).fill = FILL_YELLOW;
+      ws.getCell(r, slot.col+2).fill = FILL_YELLOW;
+      ws.getCell(r, slot.col+3).fill = FILL_YELLOW;
+    }
   }
 
   // 2) 작성 대상 슬롯: 명단 이름으로 갱신 후 데이터 채우기
@@ -527,22 +606,37 @@ async function processTemplate(tmplFile, events, year, month, namelist){
       ws.getCell(rowIdx, slot.col+4).value = null;
 
       const list = evs[dk];
+      let allEmpty = true;
       if(list && list.length >= 2){
         const inSec = Math.min(...list);
         const outSec = Math.max(...list);
         let workSec = outSec - inSec - 3600;
         if(workSec < 0) workSec = 0;
+        // 출근·퇴근은 값으로, 근무시간은 수식으로 (사용자 요청: 퇴-출-1시간)
+        const inRef = colLetter(slot.col+1) + rowIdx;
+        const outRef = colLetter(slot.col+2) + rowIdx;
         ws.getCell(rowIdx, slot.col+1).value = inSec/86400;
         ws.getCell(rowIdx, slot.col+2).value = outSec/86400;
-        ws.getCell(rowIdx, slot.col+3).value = workSec/86400;
+        ws.getCell(rowIdx, slot.col+3).value = {
+          formula: outRef + '-' + inRef + '-TIME(1,0,0)',
+          result: workSec/86400
+        };
         ws.getCell(rowIdx, slot.col+1).numFmt = 'hh:mm';
         ws.getCell(rowIdx, slot.col+2).numFmt = 'hh:mm';
         ws.getCell(rowIdx, slot.col+3).numFmt = 'hh:mm';
         workDays++;
         totalSec += workSec;
+        allEmpty = false;
       } else if(list && list.length === 1){
         ws.getCell(rowIdx, slot.col+4).value = '단일이벤트';
+        // 단일 이벤트도 출/퇴 비어있음 → 노란색 적용
       }
+
+      // 사용자 룰: 출근·퇴근·근무 3셀이 모두 비면 노란색, 아니면 노란색 제거
+      const fill = allEmpty ? FILL_YELLOW : FILL_NONE;
+      ws.getCell(rowIdx, slot.col+1).fill = fill;
+      ws.getCell(rowIdx, slot.col+2).fill = fill;
+      ws.getCell(rowIdx, slot.col+3).fill = fill;
     }
 
     const sr = slot.nameRow + 1, tr = slot.nameRow + 2;
