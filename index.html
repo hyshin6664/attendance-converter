@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.2.2</title>
+<title>근태 집계 변환기 v1.2.3</title>
 <meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 새 시트 생성. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
@@ -102,7 +102,7 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.2</span>
+      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.3</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
@@ -116,16 +116,15 @@
 
 <div class="wrap">
   <h1>📊 근태 집계 변환기</h1>
-  <p class="lead">기본자료 + SO템플릿(부서별 다중) + 명단 → <b>새 시트(YYYY-MM월)</b>로 자동 생성. 기존 시트는 절대 건드리지 않습니다.</p>
+  <p class="lead">기본자료 + SO템플릿(부서별 다중) + 명단 → <b>해당 월 시트(예: 04월)</b>에 직접 작성. 다른 월 시트(01월·02월·03월 등)는 그대로.</p>
 
   <div class="help" id="s-help">
     <b>사용법</b><br>
     1) 각 영역에 파일을 <b>드래그&드롭</b> 하거나 <b>파일 선택</b> 클릭<br>
-    2) <b>변환 실행</b> → 결과 ZIP/xlsx 다운로드<br>
-    3) 결과 파일에는 <b>YYYY-MM월</b> 새 시트가 생성되고, 기존 04월/05월 등 시트는 그대로<br>
+    2) <b>변환 실행</b> → 결과 xlsx/ZIP 다운로드<br>
+    3) 결과의 <b>04월</b>(해당 월) 시트에 명단 부서 인원 데이터가 채워짐. 기존 외곽선·서식 그대로 유지<br>
     · 기본자료는 A·B·C·D 열만 사용 (이벤트 로그)<br>
-    · SO템플릿은 한 파일에 여러 팀 블록 OK, 여러 파일도 OK<br>
-    · 새 시트 이름이 이미 존재하면 <b>오류로 중단</b> (덮어쓰기 방지)
+    · 명단의 부서 인원만 작성됨 (명단에 없으면 슬롯 비움)
   </div>
 
   <div class="card" id="s-input">
@@ -179,10 +178,15 @@
       <button class="modal-close" onclick="hideChangelog()">✕</button>
     </div>
     <div class="modal-body">
+      <h4>v1.2.3 (2026-05-06)</h4>
+      <ul>
+        <li><b>시트명은 기존 패턴 유지</b> — 결과는 <code>04월</code> 시트에 직접 작성 (이전 <code>2026-04월</code> 분리 시트 폐기). 시트는 자동 unhide</li>
+        <li><b>외곽선·서식 보존</b> — 시트 클론을 제거하고 in-place 작성. ExcelJS 클론 시 발생하던 마지막 행 외곽선 손실 해결</li>
+      </ul>
       <h4>v1.2.2 (2026-05-06)</h4>
       <ul>
-        <li><b>명단이 작성 기준</b> — 새 시트의 슬롯에는 명단 부서 인원이 순서대로 배정됨. 템플릿 원본 이름과 다르면 명단 이름으로 덮어쓰기. 명단에 없으면 슬롯 자체를 비움</li>
-        <li>슬롯 부족 시 미반영 인원을 경고로 표시 (SO템플릿에 슬롯 추가 필요)</li>
+        <li>명단이 작성 기준 — 부서 인원이 슬롯에 순서대로 배정됨</li>
+        <li>슬롯 부족 시 미반영 인원 경고</li>
       </ul>
       <h4>v1.2.1 (2026-05-06)</h4>
       <ul>
@@ -453,26 +457,18 @@ async function processTemplate(tmplFile, events, year, month, namelist){
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(await tmplFile.arrayBuffer());
 
-  const sourceMonthName = pad(month) + '월';
-  const newSheetName = year + '-' + pad(month) + '월';  // e.g. "2026-04월"
-
-  // Check duplicate target sheet — must error per requirement
-  if(wb.getWorksheet(newSheetName)){
-    log('  ✗ 이미 "' + newSheetName + '" 시트가 존재합니다 — 덮어쓰기 방지로 중단', 'err');
-    return null;
-  }
-  const sourceWs = wb.getWorksheet(sourceMonthName);
-  if(!sourceWs){
-    log('  ✗ 원본 ' + sourceMonthName + ' 시트가 없습니다 — 건너뜀', 'err');
+  const sheetName = pad(month) + '월';  // 기존 패턴: "04월"
+  const ws = wb.getWorksheet(sheetName);
+  if(!ws){
+    log('  ✗ "' + sheetName + '" 시트가 템플릿에 없습니다 — 건너뜀', 'err');
     return null;
   }
 
-  // Clone source sheet structure into new sheet (NEVER modify sourceWs)
-  const ws = cloneSheet(wb, sourceWs, newSheetName);
-  log('  · "' + sourceMonthName + '" 구조 복사 → 새 시트 "' + newSheetName + '" 생성');
-
-  // Update title in the NEW sheet only
+  // 숨겨진 시트(원본 템플릿이 04~12월 hidden)를 보이게
+  if(ws.state && ws.state !== 'visible') ws.state = 'visible';
+  // 타이틀 갱신
   ws.getCell(1,1).value = year + '년 ' + pad(month) + '월';
+  log('  · "' + sheetName + '" 시트에 직접 작성 (서식·외곽선 보존)');
 
   // 명단이 기준: 부서 매칭되는 명단 멤버 = 작성 대상
   const deptMembers = (namelist || []).filter(n => n.dept && (n.dept.includes(deptName) || deptName.includes(n.dept)));
