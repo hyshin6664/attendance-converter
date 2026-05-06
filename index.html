@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.2.4</title>
+<title>근태 집계 변환기 v1.2.5</title>
 <meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 새 시트 생성. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
@@ -102,7 +102,7 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.4</span>
+      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.5</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
@@ -178,11 +178,15 @@
       <button class="modal-close" onclick="hideChangelog()">✕</button>
     </div>
     <div class="modal-body">
+      <h4>v1.2.5 (2026-05-06)</h4>
+      <ul>
+        <li><b>fill 강제 클리어 버그 수정</b> — 템플릿 원본이 노란색이던 행에 데이터를 써도 노란색이 안 빠지던 문제 (ExcelJS 4.4 <code>cell.fill</code> 직접 할당이 일부 셀에서 무시되는 이슈). <code>cell.style</code> 통째 재할당으로 강제 적용</li>
+      </ul>
       <h4>v1.2.4 (2026-05-06)</h4>
       <ul>
-        <li><b>슬롯 자동 추가</b> — 명단 인원 &gt; 슬롯 수일 때 row-group을 자동 복사해 부족분 채움 (강채현·서용석·김미경 등 미반영 해소)</li>
-        <li><b>근무시간 수식</b> — 일자별 근무시간 셀에 <code>=퇴근-출근-TIME(1,0,0)</code> 입력. 출근·퇴근 비어있으면 수식 미입력 (에러 방지)</li>
-        <li><b>노란색 셀</b> — 출근·퇴근·근무 3셀이 모두 비면 노란색, 데이터가 있으면 노란색 제거</li>
+        <li>슬롯 자동 추가 (row-group 복사)</li>
+        <li>근무시간 수식 <code>=퇴근-출근-TIME(1,0,0)</code></li>
+        <li>노란색 셀 동적 적용</li>
       </ul>
       <h4>v1.2.3 (2026-05-06)</h4>
       <ul>
@@ -399,8 +403,14 @@ function colLetter(n){
 }
 
 // 노란색·없음 fill 정의 (사용자 룰: 출근·퇴근·근무 3셀이 모두 비면 노란색)
+// 주의: ExcelJS 4.4.0은 cell.fill 직접 할당이 일부 셀에서 무시되므로 cell.style 통째 재할당으로 강제
 const FILL_YELLOW = {type:'pattern', pattern:'solid', fgColor:{argb:'FFFFFF00'}};
-const FILL_NONE = {type:'pattern', pattern:'none'};
+const FILL_NONE = {type:'pattern', pattern:'solid', fgColor:{argb:'FFFFFFFF'}};
+function applyFill(cell, fill){
+  const s = Object.assign({}, cell.style || {});
+  s.fill = fill;
+  cell.style = s;
+}
 
 // 슬롯 row-group을 자동으로 추가 (명단 인원 > 슬롯 수일 때)
 // group height = 첫·둘째 그룹의 nameRow 차이. 그룹 1을 마지막 그룹 다음으로 복사.
@@ -576,9 +586,9 @@ async function processTemplate(tmplFile, events, year, month, namelist){
     // 일자별 출/퇴/근무 셀 노란색 (모두 빈 상태)
     for(let day = 1; day <= dim; day++){
       const r = slot.headerRow + day;
-      ws.getCell(r, slot.col+1).fill = FILL_YELLOW;
-      ws.getCell(r, slot.col+2).fill = FILL_YELLOW;
-      ws.getCell(r, slot.col+3).fill = FILL_YELLOW;
+      applyFill(ws.getCell(r, slot.col+1), FILL_YELLOW);
+      applyFill(ws.getCell(r, slot.col+2), FILL_YELLOW);
+      applyFill(ws.getCell(r, slot.col+3), FILL_YELLOW);
     }
   }
 
@@ -634,9 +644,9 @@ async function processTemplate(tmplFile, events, year, month, namelist){
 
       // 사용자 룰: 출근·퇴근·근무 3셀이 모두 비면 노란색, 아니면 노란색 제거
       const fill = allEmpty ? FILL_YELLOW : FILL_NONE;
-      ws.getCell(rowIdx, slot.col+1).fill = fill;
-      ws.getCell(rowIdx, slot.col+2).fill = fill;
-      ws.getCell(rowIdx, slot.col+3).fill = fill;
+      applyFill(ws.getCell(rowIdx, slot.col+1), fill);
+      applyFill(ws.getCell(rowIdx, slot.col+2), fill);
+      applyFill(ws.getCell(rowIdx, slot.col+3), fill);
     }
 
     const sr = slot.nameRow + 1, tr = slot.nameRow + 2;
