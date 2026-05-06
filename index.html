@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.2.0</title>
+<title>근태 집계 변환기 v1.2.1</title>
 <meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 새 시트 생성. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
@@ -102,7 +102,7 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.0</span>
+      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.1</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
@@ -179,6 +179,12 @@
       <button class="modal-close" onclick="hideChangelog()">✕</button>
     </div>
     <div class="modal-body">
+      <h4>v1.2.1 (2026-05-06)</h4>
+      <ul>
+        <li><b>일자 서식</b> — 새 시트 일자 셀이 <code>m"월" d"일"</code> 한국어 형식</li>
+        <li><b>시간 서식</b> — 출근/퇴근/근무시간/총/평균 모두 <code>hh:mm</code> (초 제거)</li>
+        <li><b>명단 기준 부서 필터</b> — 각 SO 템플릿의 부서명에 매칭되는 명단 인원만 작성. 명단 외(예: 표영수) 또는 해당 월 이벤트 0건(퇴사자, 예: 최태원) 슬롯은 블록 통째로 비움</li>
+      </ul>
       <h4>v1.2.0 (2026-05-06)</h4>
       <ul>
         <li><b>새 시트 패턴</b> — 결과는 항상 <code>YYYY-MM월</code> 새 시트에 작성. 기존 시트(04월 등) 절대 미변경</li>
@@ -397,28 +403,30 @@ function findSlots(ws){
   return slots;
 }
 
-// Deep-clone a worksheet within a workbook (model-based + manual merge re-apply)
+// Deep-clone a worksheet within a workbook — cell-by-cell to preserve Date instances
 function cloneSheet(wb, sourceWs, newName){
   const dst = wb.addWorksheet(newName);
-  // model-based copy. Bypass private name/id which ExcelJS controls.
-  const m = sourceWs.model;
-  const cloned = JSON.parse(JSON.stringify(m, (k, v) => v));
-  cloned.name = newName;
-  cloned.id = dst.id;
-  cloned.orderNo = dst.orderNo;
-  // Some properties shouldn't be copied (e.g. sheetId)
-  delete cloned.sheetId;
-  try { dst.model = cloned; } catch(e) {
-    // fallback: cell-by-cell
-    sourceWs.eachRow((row, ri) => {
-      row.eachCell({includeEmpty: true}, (cell, ci) => {
-        const newCell = dst.getCell(ri, ci);
-        newCell.value = cell.value;
-        if(cell.style) newCell.style = JSON.parse(JSON.stringify(cell.style));
-      });
+  // Column widths first (so subsequent cell writes inherit)
+  if(sourceWs.columns){
+    sourceWs.columns.forEach((col, i) => {
+      if(col && col.width) dst.getColumn(i+1).width = col.width;
     });
   }
-  // Re-apply merges (model copy may drop them)
+  // Cell-by-cell: preserves Date values; style JSON-clone is safe (style is plain object)
+  sourceWs.eachRow({includeEmpty: true}, (row, ri) => {
+    const dstRow = dst.getRow(ri);
+    if(row.height) dstRow.height = row.height;
+    row.eachCell({includeEmpty: true}, (cell, ci) => {
+      const dc = dst.getCell(ri, ci);
+      // Copy value (ExcelJS cell.value returns the actual value, including Date)
+      if(cell.value !== null && cell.value !== undefined) dc.value = cell.value;
+      // Copy style/format (deep clone via JSON — style has no Date values)
+      if(cell.style) {
+        try { dc.style = JSON.parse(JSON.stringify(cell.style)); } catch(e) {}
+      }
+    });
+  });
+  // Re-apply merges
   if(sourceWs._merges){
     for(const k of Object.keys(sourceWs._merges)){
       const mg = sourceWs._merges[k];
@@ -426,17 +434,6 @@ function cloneSheet(wb, sourceWs, newName){
       try { dst.mergeCells(mg.top, mg.left, mg.bottom, mg.right); } catch(e){}
     }
   }
-  // Column widths
-  if(sourceWs.columns){
-    sourceWs.columns.forEach((col, i) => {
-      if(col && col.width) dst.getColumn(i+1).width = col.width;
-    });
-  }
-  // Row heights
-  sourceWs.eachRow((row, ri) => {
-    if(row.height) dst.getRow(ri).height = row.height;
-  });
-  // Make new sheet visible regardless of source
   dst.state = 'visible';
   return dst;
 }
@@ -471,14 +468,46 @@ async function processTemplate(tmplFile, events, year, month, namelist){
   // Update title in the NEW sheet only
   ws.getCell(1,1).value = year + '년 ' + pad(month) + '월';
 
-  // Find slots IN THE NEW SHEET (it carries the same structure as source)
-  const slots = findSlots(ws);
-  log('  · 슬롯 ' + slots.length + '명: ' + slots.map(x=>x.name).join(', '));
+  // Find ALL slots in new sheet
+  const allSlots = findSlots(ws);
+
+  // 명단 기준 부서 필터: 이 템플릿의 부서명에 해당하는 명단 멤버만 작성
+  const deptMembers = (namelist || []).filter(n => n.dept && (n.dept.includes(deptName) || deptName.includes(n.dept)));
+  const sourceList = deptMembers.length ? deptMembers : (namelist || []);
+  const keepSet = new Set(sourceList.map(m => m.normName));
+
+  // 작성/클리어 분리: (명단 외) 또는 (이벤트 0건 = 퇴사로 간주) → 클리어
+  const writeSlots = [];
+  const clearSlots = [];
+  const reasons = {}; // normName -> "명단외" | "이벤트0"
+  for(const s of allSlots){
+    const inList = keepSet.has(s.normName);
+    const hasEvents = events[s.normName] && Object.keys(events[s.normName]).length > 0;
+    if(inList && hasEvents){
+      writeSlots.push(s);
+    } else {
+      clearSlots.push(s);
+      reasons[s.normName] = !inList ? '명단외' : '이벤트0(퇴사로 간주)';
+    }
+  }
+
+  log('  · 전체 슬롯 ' + allSlots.length + '명 / 작성 ' + writeSlots.length + '명 / 제외 ' + clearSlots.length + '명');
+  if(clearSlots.length) log('    제외: ' + clearSlots.map(x=>x.name + '(' + reasons[x.normName] + ')').join(', '), 'warn');
+  if(writeSlots.length) log('    작성: ' + writeSlots.map(x=>x.name).join(', '));
 
   const dim = new Date(year, month, 0).getDate();
   let missCount = 0;
 
-  for(const slot of slots){
+  // 1) 명단 외 슬롯은 블록 전체 클리어 (이름·통계·헤더·일자별 줄)
+  for(const slot of clearSlots){
+    const blockCols = [slot.col, slot.col+1, slot.col+2, slot.col+3, slot.col+4, slot.col+5];
+    const blockRows = [slot.nameRow, slot.nameRow+1, slot.nameRow+2, slot.headerRow];
+    for(let day = 1; day <= dim; day++) blockRows.push(slot.headerRow + day);
+    blockRows.forEach(r => blockCols.forEach(c => { ws.getCell(r, c).value = null; }));
+  }
+
+  // 2) 작성 대상 슬롯에 데이터 채우기
+  for(const slot of writeSlots){
     const evs = events[slot.normName] || {};
     let workDays = 0, totalSec = 0;
     const hasAnyEvent = Object.keys(evs).length > 0;
@@ -488,7 +517,7 @@ async function processTemplate(tmplFile, events, year, month, namelist){
       const dk = year + '-' + pad(month) + '-' + pad(day);
       const dayDate = new Date(Date.UTC(year, month-1, day));
       ws.getCell(rowIdx, slot.col).value = dayDate;
-      ws.getCell(rowIdx, slot.col).numFmt = 'yyyy-mm-dd';
+      ws.getCell(rowIdx, slot.col).numFmt = 'm"월" d"일";@';
       ws.getCell(rowIdx, slot.col+1).value = null;
       ws.getCell(rowIdx, slot.col+2).value = null;
       ws.getCell(rowIdx, slot.col+3).value = null;
@@ -503,9 +532,9 @@ async function processTemplate(tmplFile, events, year, month, namelist){
         ws.getCell(rowIdx, slot.col+1).value = inSec/86400;
         ws.getCell(rowIdx, slot.col+2).value = outSec/86400;
         ws.getCell(rowIdx, slot.col+3).value = workSec/86400;
-        ws.getCell(rowIdx, slot.col+1).numFmt = 'hh:mm:ss';
-        ws.getCell(rowIdx, slot.col+2).numFmt = 'hh:mm:ss';
-        ws.getCell(rowIdx, slot.col+3).numFmt = 'hh:mm:ss';
+        ws.getCell(rowIdx, slot.col+1).numFmt = 'hh:mm';
+        ws.getCell(rowIdx, slot.col+2).numFmt = 'hh:mm';
+        ws.getCell(rowIdx, slot.col+3).numFmt = 'hh:mm';
         workDays++;
         totalSec += workSec;
       } else if(list && list.length === 1){
@@ -518,29 +547,23 @@ async function processTemplate(tmplFile, events, year, month, namelist){
     ws.getCell(sr, slot.col+3).value = Math.max(0, dim - workDays);
     ws.getCell(sr, slot.col+5).value = 0;
     ws.getCell(tr, slot.col+2).value = totalSec/86400;
-    ws.getCell(tr, slot.col+2).numFmt = '[h]:mm:ss';
+    ws.getCell(tr, slot.col+2).numFmt = '[h]:mm';
     const avg = workDays > 0 ? totalSec/workDays : 0;
     ws.getCell(tr, slot.col+5).value = avg/86400;
-    ws.getCell(tr, slot.col+5).numFmt = 'hh:mm:ss';
+    ws.getCell(tr, slot.col+5).numFmt = 'hh:mm';
 
     if(!hasAnyEvent){ missCount++; }
     log('    - ' + slot.name + ': 근무 ' + workDays + '일, 총 ' + fracToHMS(totalSec/86400) + ', 평균 ' + fracToHMS(avg/86400) + (hasAnyEvent ? '' : ' (이벤트 없음)'), hasAnyEvent ? null : 'warn');
   }
 
-  // 명단 진단
-  if(namelist && namelist.length){
-    const slotNorms = new Set(slots.map(x=>x.normName));
-    const deptCandidates = namelist.filter(n => n.dept && (n.dept.includes(deptName) || deptName.includes(n.dept)));
-    const sourceList = deptCandidates.length ? deptCandidates : namelist;
-    const missingFromTmpl = sourceList.filter(x => !slotNorms.has(x.normName));
-    const extraInTmpl = slots.filter(x => !sourceList.some(n => n.normName === x.normName));
-    if(missingFromTmpl.length) log('  ⚠ 명단엔 있고 템플릿엔 없는 인원: ' + missingFromTmpl.map(x=>x.name).join(', '), 'warn');
-    if(extraInTmpl.length) log('  ⚠ 템플릿엔 있고 명단엔 없는 인원: ' + extraInTmpl.map(x=>x.name).join(', '), 'warn');
-  }
+  // 명단엔 있는데 템플릿엔 없는 인원
+  const slotNorms = new Set(allSlots.map(x => x.normName));
+  const missingFromTmpl = sourceList.filter(x => !slotNorms.has(x.normName));
+  if(missingFromTmpl.length) log('  ⚠ 명단엔 있고 템플릿엔 없는 인원: ' + missingFromTmpl.map(x=>x.name).join(', '), 'warn');
 
   const buffer = await wb.xlsx.writeBuffer();
   const outName = year + '년 ' + pad(month) + '월 ' + baseName + '.xlsx';
-  return {buffer, fileName: outName, slotsCount: slots.length, missCount, dept: deptName};
+  return {buffer, fileName: outName, slotsCount: writeSlots.length, missCount, dept: deptName};
 }
 
 async function run(){
