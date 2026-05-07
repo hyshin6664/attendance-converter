@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.3.1</title>
+<title>근태 집계 변환기 v1.3.2</title>
 <meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 새 시트 생성. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
@@ -108,7 +108,7 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.3.1</span>
+      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.3.2</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
@@ -194,10 +194,14 @@
       <button class="modal-close" onclick="hideChangelog()">✕</button>
     </div>
     <div class="modal-body">
+      <h4>v1.3.2 (2026-05-07)</h4>
+      <ul>
+        <li><b>평균 수식 단순화</b> — <code>=J6/I5</code> (이전 IFERROR 래핑 제거, 사용자 스크린샷과 일치)</li>
+      </ul>
       <h4>v1.3.1 (2026-05-07)</h4>
       <ul>
-        <li><b>통계 셀 수식화</b> — 근무일 <code>=COUNTA(B9:B38)</code>, 연차휴가외 <code>=COUNTA(E9:E38)</code>, 결근 <code>=$R$2-$T$2-B5-D5</code>, 총근무시간 <code>=SUM(D9:D38)</code>, 평균 <code>=IFERROR(C6/B5,0)</code>. 사용자가 출/퇴 직접 수정해도 자동 반영</li>
-        <li><b>공휴일 노란색 미적용</b> — 일자 셀 글자색이 빨강(공휴일·일요일)인 행은 출/퇴/근무 비어 있어도 노란색을 칠하지 않음</li>
+        <li>통계 셀 수식화 (COUNTA/SUM/$R$2-$T$2-B5-D5/=C6/B5)</li>
+        <li>공휴일 노란색 미적용 (빨강 글자 + 일요일)</li>
       </ul>
       <h4>v1.3.0 (2026-05-07)</h4>
       <ul>
@@ -840,9 +844,9 @@ async function processTemplate(tmplFile, events, year, month, namelist, eventMap
     // 총근무시간 = SUM(근무범위)
     ws.getCell(tr, slot.col+2).value = {formula: 'SUM(' + workCol + startR + ':' + workCol + endR + ')', result: totalSec/86400};
     ws.getCell(tr, slot.col+2).numFmt = '[h]:mm';
-    // 평균근무시간 = 총/근무일 (0 나누기 방지)
+    // 평균근무시간 = 총/근무일 (사용자 스크린샷 그대로: =J6/I5)
     const avg = workDays > 0 ? totalSec/workDays : 0;
-    ws.getCell(tr, slot.col+5).value = {formula: 'IFERROR(' + totRef + '/' + wdRef + ',0)', result: avg/86400};
+    ws.getCell(tr, slot.col+5).value = {formula: totRef + '/' + wdRef, result: avg/86400};
     ws.getCell(tr, slot.col+5).numFmt = 'hh:mm';
 
     if(!hasAnyEvent){ missCount++; }
