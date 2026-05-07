@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.3.3</title>
+<title>근태 집계 변환기 v1.3.4</title>
 <meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 새 시트 생성. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
@@ -108,7 +108,7 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.3.3</span>
+      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.3.4</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
@@ -194,9 +194,13 @@
       <button class="modal-close" onclick="hideChangelog()">✕</button>
     </div>
     <div class="modal-body">
+      <h4>v1.3.4 (2026-05-07)</h4>
+      <ul>
+        <li><b>빨간날 출/퇴/근무 자동 삭제</b> — 토·일·공휴일에 출퇴근 이벤트가 있어도 그 시간 데이터를 모두 비움 (이벤트 → 빨간날 → 평일 데이터 순으로 우선순위)</li>
+      </ul>
       <h4>v1.3.3 (2026-05-07)</h4>
       <ul>
-        <li><b>토요일도 노란색 제외</b> — 일·토 모두 공휴일 취급. 빨강 글자(공휴일)와 함께 주말도 노란색 미적용</li>
+        <li>토요일도 노란색 제외 (일·토 모두 공휴일 취급)</li>
       </ul>
       <h4>v1.3.2 (2026-05-07)</h4>
       <ul>
@@ -797,6 +801,9 @@ async function processTemplate(tmplFile, events, year, month, namelist, eventMap
       if(eventNote){
         ws.getCell(rowIdx, slot.col+4).value = eventNote;
         // 출/퇴/근무는 이미 null로 초기화됐음 → allEmpty=true → 노란색 적용
+      } else if(isHoliday){
+        // 빨간날(토·일·공휴일): list 무시하고 출/퇴/근무 시간 모두 비움
+        // 이미 null로 초기화됐으므로 아무 처리 안 함
       } else if(list && list.length >= 2){
         const inSec = Math.min(...list);
         const outSec = Math.max(...list);
