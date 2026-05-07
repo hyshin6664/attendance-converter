@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.2.7</title>
+<title>근태 집계 변환기 v1.2.8</title>
 <meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 새 시트 생성. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
@@ -102,7 +102,7 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.7</span>
+      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.8</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
@@ -178,11 +178,14 @@
       <button class="modal-close" onclick="hideChangelog()">✕</button>
     </div>
     <div class="modal-body">
+      <h4>v1.2.8 (2026-05-07)</h4>
+      <ul>
+        <li><b>3번째 테이블 우측 외곽선 누락 수정</b> — 자동 추가된 row-group의 슬롯 우측 끝(col F/M/T)에 right border가 일부 사이드 누락되던 ExcelJS 머지 영역 style 복사 버그. 슬롯 끝 col에 명시적으로 right border 재적용</li>
+      </ul>
       <h4>v1.2.7 (2026-05-06)</h4>
       <ul>
-        <li><b>가로 3개씩 고정 룰</b> — 새 시트는 항상 인원수 ÷ 3 올림 만큼의 row-group(각 3 슬롯). 4명→2×3=6슬롯, 7명→3×3=9슬롯, 11명→4×3=12슬롯</li>
-        <li><b>부분 그룹 자동 숨김</b> — 템플릿에 1~2슬롯만 있는 row-group은 자동 숨겨짐(완전 3슬롯 그룹 우선 사용)</li>
-        <li><b>초과 그룹 자동 숨김</b> — 명단보다 많은 슬롯이 있으면 사용 안 하는 row-group 통째로 숨김</li>
+        <li>가로 3개씩 고정 룰 (ceil(N/3) row-group)</li>
+        <li>부분 그룹·초과 그룹 자동 숨김</li>
       </ul>
       <h4>v1.2.6 (2026-05-06)</h4>
       <ul>
@@ -473,14 +476,37 @@ function appendRowGroup(ws, allSlots){
           }
         }
       }
-      // style은 항상 복사
+      // 스타일은 attribute별 명시 복사 (cell.style 통째 복사 시 border 일부 누락되는 ExcelJS 버그 회피)
       if(sc.style){ try { dc.style = JSON.parse(JSON.stringify(sc.style)); } catch(e){} }
+      ['border','fill','font','alignment','protection'].forEach(attr => {
+        try {
+          const v = sc[attr];
+          if(v !== undefined && v !== null && typeof v === 'object'){
+            dc[attr] = JSON.parse(JSON.stringify(v));
+          }
+        } catch(e){}
+      });
+      if(sc.numFmt) { try { dc.numFmt = sc.numFmt; } catch(e){} }
     }
   }
   // 머지 적용 (offset)
   const offset = destStart - sourceStart;
   for(const m of srcMerges){
     try { ws.mergeCells(m.top + offset, m.left, m.bottom + offset, m.right); } catch(e){}
+  }
+  // 외곽 right-border 보정: ExcelJS는 머지 영역 안 cells의 일부 사이드 정보 유실 → 슬롯 우측 col(6/13/20)의 right border 명시적 재적용
+  const slotEndCols = [6, 13, 20];  // slot 1 끝, slot 2 끝, slot 3 끝
+  for(let dr = 0; dr < groupHeight; dr++){
+    const srcR = sourceStart + dr, dstR = destStart + dr;
+    for(const c of slotEndCols){
+      const sc = ws.getCell(srcR, c);
+      if(sc.border && sc.border.right && sc.border.right.style){
+        const dc = ws.getCell(dstR, c);
+        const cur = dc.border ? JSON.parse(JSON.stringify(dc.border)) : {};
+        cur.right = JSON.parse(JSON.stringify(sc.border.right));
+        dc.border = cur;
+      }
+    }
   }
 }
 
