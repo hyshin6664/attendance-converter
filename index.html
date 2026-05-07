@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>근태 집계 변환기 v1.2.8</title>
+<title>근태 집계 변환기 v1.3.0</title>
 <meta name="description" content="기본자료·SO템플릿·명단 → 해당 월 새 시트 생성. 브라우저 내 처리, 외부 전송 없음.">
 <meta name="theme-color" content="#6366f1">
 <link rel="manifest" href="./manifest.json">
@@ -47,6 +47,12 @@
   .file-row .name .multi{display:block;margin-top:4px;font-size:11px}
   .file-row .name .multi span{display:inline-block;background:var(--soft);color:#4338ca;padding:2px 8px;border-radius:4px;margin:1px 3px 1px 0}
   .file-row .hint{color:#9ca3af;font-style:italic}
+  .event-row{display:grid;grid-template-columns:140px 1fr 1.5fr auto;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fcfcfa;border-style:dashed}
+  .event-row label{font-size:12px;color:#374151;font-weight:600;justify-self:start}
+  .event-row input[type=date]{padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;background:#fff}
+  .event-row input[type=text]{padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;background:#fff;width:100%}
+  .event-row .del{background:#fee2e2;color:#991b1b;border:0;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit}
+  .event-row .del:hover{background:#fecaca}
   .file-row input[type=file]{display:none}
   .btn{appearance:none;border:1px solid var(--line);background:#fff;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit}
   .btn:hover{background:#f3f4f6}
@@ -102,10 +108,11 @@
     <div class="logo">
       <svg viewBox="0 0 64 64"><defs><linearGradient id="g1" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#818cf8"/><stop offset="1" stop-color="#6366f1"/></linearGradient></defs><rect x="6" y="10" width="52" height="48" rx="10" fill="url(#g1)"/><rect x="6" y="10" width="52" height="14" rx="10" fill="#4f46e5"/><circle cx="20" cy="17" r="2.5" fill="#fff"/><circle cx="44" cy="17" r="2.5" fill="#fff"/><circle cx="32" cy="40" r="13" fill="#fff"/><circle cx="32" cy="40" r="11" fill="#eef2ff"/><path d="M32 32 v8 l6 4" stroke="#4338ca" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>
       <span>근태 집계 변환기</span>
-      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.2.8</span>
+      <span class="ver" id="verBtn" title="클릭하면 변경 이력이 보입니다">v1.3.0</span>
     </div>
     <nav class="nav">
       <a onclick="goTo('s-input')">📥 입력</a>
+      <a onclick="goTo('s-events')">🗓 이벤트</a>
       <a onclick="goTo('s-log')">📋 처리</a>
       <a onclick="goTo('s-help')">❓ 사용법</a>
       <a onclick="showChangelog()">📜 이력</a>
@@ -155,6 +162,15 @@
     </div>
   </div>
 
+  <div class="card" id="s-events">
+    <h2>② 이벤트 (선택사항) — 해당 날짜 전 인원 출/퇴/근무 비우고 비고에 텍스트 입력</h2>
+    <div id="eventList" class="files"></div>
+    <div class="actions">
+      <button class="btn" onclick="addEvent()">＋ 이벤트 추가</button>
+      <span style="font-size:11px;color:var(--muted)">예: 4월 24일 · 산행 / 4월 30일 · 가정의 날</span>
+    </div>
+  </div>
+
   <div class="card" id="s-log" style="display:none">
     <h2>② 처리 로그</h2>
     <div class="summary" id="summary" style="display:none">
@@ -178,9 +194,13 @@
       <button class="modal-close" onclick="hideChangelog()">✕</button>
     </div>
     <div class="modal-body">
+      <h4>v1.3.0 (2026-05-07)</h4>
+      <ul>
+        <li><b>이벤트 추가 기능</b> — 변환 전에 날짜+비고를 등록하면, 그 날짜에 모든 인원의 출/퇴/근무 시간이 비워지고 비고 칸에 등록 텍스트가 자동 입력됨. 추가/삭제 자유, 0개부터 여러 개까지 가능 (예: 4월 24일 산행, 4월 30일 가정의 날)</li>
+      </ul>
       <h4>v1.2.8 (2026-05-07)</h4>
       <ul>
-        <li><b>3번째 테이블 우측 외곽선 누락 수정</b> — 자동 추가된 row-group의 슬롯 우측 끝(col F/M/T)에 right border가 일부 사이드 누락되던 ExcelJS 머지 영역 style 복사 버그. 슬롯 끝 col에 명시적으로 right border 재적용</li>
+        <li>3번째 테이블 우측 외곽선 누락 수정 (slot 끝 col 명시 border 재적용)</li>
       </ul>
       <h4>v1.2.7 (2026-05-06)</h4>
       <ul>
@@ -250,7 +270,7 @@
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script>
-const state = {base:null, tmpls:[], list:null, outFiles:[], zipBlob:null, zipName:''};
+const state = {base:null, tmpls:[], list:null, outFiles:[], zipBlob:null, zipName:'', events:[]};
 const $ = id => document.getElementById(id);
 const norm = s => (s||'').toString().replace(/\s+/g,'').trim();
 const pad = n => String(n).padStart(2,'0');
@@ -310,6 +330,37 @@ function onPickList(file){
 function refreshRunBtn(){
   $('runBtn').disabled = !(state.base && state.tmpls.length && state.list);
 }
+
+// ---------- Events (선택 입력) ----------
+function addEvent(date, note){
+  state.events.push({date: date || '', note: note || ''});
+  renderEvents();
+}
+function removeEvent(idx){
+  state.events.splice(idx, 1);
+  renderEvents();
+}
+function updateEvent(idx, field, value){
+  if(state.events[idx]) state.events[idx][field] = value;
+}
+function renderEvents(){
+  const el = $('eventList');
+  el.innerHTML = '';
+  if(!state.events.length){
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px 0">등록된 이벤트가 없습니다. 필요 시 우측 ＋ 버튼으로 추가하세요.</div>';
+    return;
+  }
+  state.events.forEach((ev, i) => {
+    const row = document.createElement('div');
+    row.className = 'event-row';
+    row.innerHTML = '<label>이벤트 ' + (i+1) + '</label>' +
+      '<input type="date" value="' + (ev.date||'') + '" oninput="updateEvent(' + i + ',\'date\',this.value)">' +
+      '<input type="text" placeholder="비고 (예: 산행, 가정의 날, 워크숍)" value="' + (ev.note||'').replace(/"/g,'&quot;') + '" oninput="updateEvent(' + i + ',\'note\',this.value)">' +
+      '<button class="del" onclick="removeEvent(' + i + ')">삭제</button>';
+    el.appendChild(row);
+  });
+}
+renderEvents();
 
 // ---------- Drag & Drop (per-zone depth counter pattern) ----------
 function wireDropZone(el, kind){
@@ -573,7 +624,7 @@ function cloneSheet(wb, sourceWs, newName){
 }
 
 // Process one SO template file
-async function processTemplate(tmplFile, events, year, month, namelist){
+async function processTemplate(tmplFile, events, year, month, namelist, eventMap){
   const baseName = tmplFile.name.replace(/\.xlsx$/i,'');
   const deptName = baseName.replace(/_SO$/i,'').replace(/SO_?/i,'').trim() || baseName;
   log('━ ' + tmplFile.name + ' (부서: ' + deptName + ')', 'head');
@@ -718,7 +769,12 @@ async function processTemplate(tmplFile, events, year, month, namelist){
 
       const list = evs[dk];
       let allEmpty = true;
-      if(list && list.length >= 2){
+      // 이벤트 등록일이면 모든 인원 출/퇴/근무 비우고 비고에 등록 텍스트 입력
+      const eventNote = eventMap && eventMap[dk];
+      if(eventNote){
+        ws.getCell(rowIdx, slot.col+4).value = eventNote;
+        // 출/퇴/근무는 이미 null로 초기화됐음 → allEmpty=true → 노란색 적용
+      } else if(list && list.length >= 2){
         const inSec = Math.min(...list);
         const outSec = Math.max(...list);
         let workSec = outSec - inSec - 3600;
@@ -787,10 +843,19 @@ async function run(){
     if(!year) throw new Error('기본자료에서 대상 월을 찾을 수 없습니다.');
     log('✓ 기본자료: ' + count + '건 이벤트, 대상 ' + year + '년 ' + pad(month) + '월', 'ok');
 
+    // 이벤트 맵 (사용자 입력 → date string → note text)
+    const eventMap = {};
+    for(const ev of (state.events || [])){
+      if(ev.date && ev.note) eventMap[ev.date] = ev.note;
+    }
+    if(Object.keys(eventMap).length){
+      log('✓ 이벤트 ' + Object.keys(eventMap).length + '건 적용 예정: ' + Object.entries(eventMap).map(([d,n])=>d+'→'+n).join(', '), 'ok');
+    }
+
     let totalPeople = 0, totalMiss = 0, processed = 0;
     for(const tmpl of state.tmpls){
       try {
-        const r = await processTemplate(tmpl, events, year, month, namelist);
+        const r = await processTemplate(tmpl, events, year, month, namelist, eventMap);
         if(!r) continue;
         state.outFiles.push(r);
         totalPeople += r.slotsCount;
